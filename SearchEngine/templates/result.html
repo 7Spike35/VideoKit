@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+{% extends "base.html" %}
+{% block title %}B站视频搜索{% endblock %}
+{% block content %}
+<html>
+<head>
+    <title>搜索结果</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>搜索结果</h1>
+        <div class="search-meta">
+            <p>当前关键词：{{ keywords }}</p>
+            <a href="/" class="back-btn">返回搜索</a>
+        </div>
+
+        {% if error %}
+            <div class="error">
+                ⚠️ 搜索出错：{{ error }}
+            </div>
+        {% else %}
+            <div class="result-stats">
+                共 {{ total }} 项数据
+            </div>
+
+            <!-- 在原有表格中新增热度列 -->
+<table class="result-table">
+    <thead>
+        <tr>
+            <th>视频名称</th>
+            <th>热度值</th>
+            <th>视频地址</th>
+            <th>收藏</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in results %}
+        <tr>
+            <td class="video-title">{{ item.标题 }}</td>
+            <td>{{ "%.1f"|format(item.热度值) }}</td>
+            <td>
+                <a href="https://www.bilibili.com/video/{{ item.bvid }}" target="_blank">
+                    观看视频
+                </a>
+            </td>
+            <td>
+                <button class="collect-btn"
+                        data-bvid="{{ item.bvid }}"
+                        data-title="{{ item.标题 }}"
+                        data-heat="{{ item.热度值 }}">
+                    {{ '❤️ 已收藏' if item.bvid in favorites_bvid else '♡ 收藏' }}
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- 新增JavaScript交互 -->
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+        {% endif %}
+    </div>
+</body>
+</html>
+{% endblock %}

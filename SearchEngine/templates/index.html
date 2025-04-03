@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+{% extends "base.html" %}
+{% block title %}搜索结果{% endblock %}
+{% block content %}
+<html>
+<head>
+    <title>B站视频搜索</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            width: 100px;
+            height: 100px;
+            margin-right: 25px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin: 0;
+            color: #333;
+        }
+
+        .search-form {
+            display: flex;
+            flex-direction: column; /* 改为垂直布局 */
+            align-items: center; /* 水平居中 */
+            gap: 20px; /* 输入框和按钮之间的间距 */
+        }
+
+        input[type="text"] {
+            width: 400px;
+            padding: 12px 16px;
+            font-size: 1.2em;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #00a1d6;
+        }
+
+        .search-button {
+            width: 200px; /* 按钮宽度稍小，保持比例 */
+            padding: 12px 24px;
+            font-size: 1.2em;
+            background-color: #00a1d6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .search-button:hover {
+            background-color: #0083b0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
+            <h1>增强搜索</h1>
+        </div>
+        <form action="{{ url_for('search') }}" method="POST" class="search-form">
+            <input type="text"
+                   name="keywords"
+                   placeholder="输入关键词（多个用#分隔）"
+                   required>
+            <button type="submit" class="search-button">搜索</button>
+        </form>
+    </div>
+</body>
+</html>
+{% endblock %}

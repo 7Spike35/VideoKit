@@ -1,0 +1,133 @@
+/* 结果页专用样式 */
+.search-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.back-btn {
+    padding: 8px 15px;
+    background: #6c757d;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.result-stats {
+    margin: 15px 0;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.result-table {
+    width: 100%;
+    border-collapse: collapse;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.result-table th {
+    background: #4CAF50;
+    color: white;
+    padding: 12px;
+    text-align: left;
+}
+
+.result-table td {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+}
+
+.video-title {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.collect-btn {
+    padding: 5px 10px;
+    background: #ffc107;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.collect-btn[data-collected="true"] {
+    background: #28a745;
+    color: white;
+}
+
+.error {
+    padding: 15px;
+    background: #f8d7da;
+    color: #dc3545;
+    border-radius: 4px;
+    margin: 20px 0;
+}
+
+/* 收藏页面专用样式 */
+.favorite-table {
+    margin-top: 20px;
+    background: white;
+}
+
+.no-favorites {
+    padding: 30px;
+    text-align: center;
+    color: #666;
+    font-size: 1.2em;
+}
+
+/* 热度值颜色标记 */
+td:nth-child(2) {
+    color: #ff4757;
+    font-weight: bold;
+}
+
+/* 收藏按钮动效 */
+.collect-btn {
+    transition: all 0.3s ease;
+}
+
+.collect-btn:hover {
+    transform: scale(1.1);
+}
+
+/* 新增导航栏样式 */
+.main-nav {
+    background-color: #00a1d6;
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.main-nav a {
+    color: white;
+    text-decoration: none;
+    font-size: 1.2em;
+    padding: 8px 16px;
+    transition: background-color 0.3s;
+}
+
+.main-nav a:hover {
+    background-color: #0083b0;
+    border-radius: 4px;
+}
+
+/* 禁用按钮样式 */
+button:disabled {
+    background: #cccccc !important;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.search-type {
+    display: block !important;
+    background: #00a1d6 !important;
+}

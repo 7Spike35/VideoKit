@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .main-nav {
+            background-color: #00a1d6;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .main-nav a {
+            color: white;
+            text-decoration: none;
+            font-size: 1.2em;
+            padding: 8px 16px;
+            transition: background-color 0.3s;
+        }
+
+        .main-nav a:hover {
+            background-color: #0083b0;
+            border-radius: 4px;
+        }
+
+        /* 登录/注册模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            width: 400px;
+            max-width: 90%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+            color: #666;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+
+        .close-btn:hover {
+            color: #00a1d6;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 1.1em;
+            color: #666;
+            transition: color 0.3s;
+        }
+
+        .tab.active {
+            color: #00a1d6;
+            border-bottom: 2px solid #00a1d6;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1em;
+            color: #333;
+            text-align: left;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            font-size: 1em;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            border-color: #00a1d6;
+            box-shadow: 0 0 4px rgba(0, 161, 214, 0.3);
+        }
+
+        .modal-button {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1em;
+            background-color: #00a1d6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+
+        .modal-button:hover {
+            background-color: #0083b0;
+            transform: scale(1.02);
+        }
+
+        /* 成功提示模态框 */
+        .success-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .success-modal.active {
+            display: flex;
+        }
+
+        .success-modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 300px;
+            max-width: 90%;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .success-modal-content p {
+            font-size: 1.1em;
+            color: #333;
+            margin: 0 0 20px 0;
+        }
+
+        .success-modal-button {
+            padding: 10px 20px;
+            font-size: 1em;
+            background-color: #00a1d6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .success-modal-button:hover {
+            background-color: #0083b0;
+        }
+    </style>
+</head>
+<body>
+    <nav class="main-nav">
+        <div>
+            <a href="{{ url_for('index') }}">🏠 首页</a>
+            <a href="{{ url_for('show_favorites') }}">❤️ 我的收藏</a>
+        </div>
+        <a href="#" id="login-register">登录/注册</a>
+    </nav>
+
+    <!-- 登录/注册模态框 -->
+    <div class="modal" id="login-modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeLoginModal()">×</span>
+            <div class="tabs">
+                <div class="tab active" data-tab="signin">登录</div>
+                <div class="tab" data-tab="signup">注册</div>
+            </div>
+            <div class="tab-content active" id="signin">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="signin-username" placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="signin-password" placeholder="请输入密码">
+                </div>
+                <button class="modal-button" onclick="fakeLogin()">登录</button>
+            </div>
+            <div class="tab-content" id="signup">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="signup-username" placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="signup-password" placeholder="请输入密码">
+                </div>
+                <div class="form-group">
+                    <label>重复密码</label>
+                    <input type="password" id="signup-repeat-password" placeholder="请再次输入密码">
+                </div>
+                <button class="modal-button" onclick="fakeRegister()">注册</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成功提示模态框 -->
+    <div class="success-modal" id="success-modal">
+        <div class="success-modal-content">
+            <p id="success-message"></p>
+            <button class="success-modal-button" id="success-modal-close">确定</button>
+        </div>
+    </div>
+
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        // 打开登录/注册模态框
+        document.getElementById('login-register').addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('login-modal').style.display = 'flex';
+        });
+
+        // 关闭登录/注册模态框
+        function closeLoginModal() {
+            document.getElementById('login-modal').style.display = 'none';
+        }
+
+        // 切换选项卡
+        const tabs = document.querySelectorAll('.tab');
+        const contents = document.querySelectorAll('.tab-content');
+        function switchTab(tabName) {
+            tabs.forEach(t => t.classList.remove('active'));
+            contents.forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                switchTab(tab.dataset.tab);
+            });
+        });
+
+        // 显示成功提示模态框
+        function showSuccessModal(message) {
+            console.log('Showing success modal with message:', message); // 调试信息
+            document.getElementById('success-message').textContent = message;
+            document.getElementById('success-modal').classList.add('active');
+        }
+
+        // 关闭成功提示模态框
+        function closeSuccessModal() {
+            console.log('Closing success modal'); // 调试信息
+            document.getElementById('success-modal').classList.remove('active');
+        }
+
+        // 为成功模态框的关闭按钮绑定事件
+        document.getElementById('success-modal-close').addEventListener('click', () => {
+            closeSuccessModal();
+            // 如果是登录成功后的关闭，确保导航条已更新
+            const username = document.getElementById('signin-username').value;
+            if (username && document.getElementById('login-modal').style.display === 'none') {
+                document.getElementById('login-register').textContent = username;
+            }
+        });
+
+        function fakeLogin() {
+            const username = document.getElementById('signin-username').value;
+            if (username) {
+                console.log('Login successful, username:', username); // 调试信息
+                document.getElementById('login-register').textContent = username; // 更新导航条
+                showSuccessModal(`登录成功！用户名: ${username}`);
+                closeLoginModal();
+            } else {
+                showSuccessModal('请输入用户名！');
+            }
+        }
+
+        function fakeRegister() {
+            const username = document.getElementById('signup-username').value;
+            const password = document.getElementById('signup-password').value;
+            const repeatPassword = document.getElementById('signup-repeat-password').value;
+            if (password === repeatPassword && username) {
+                showSuccessModal(`注册成功！用户名: ${username}`);
+                // 清空注册表单
+                document.getElementById('signup-username').value = '';
+                document.getElementById('signup-password').value = '';
+                document.getElementById('signup-repeat-password').value = '';
+                // 切换到登录选项卡
+                switchTab('signin');
+            } else if (!username) {
+                showSuccessModal('请输入用户名！');
+            } else {
+                showSuccessModal('密码不匹配！');
+            }
+        }
+    </script>
+</body>
+</html>

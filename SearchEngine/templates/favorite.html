@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+{% extends "base.html" %}
+{% block title %}搜索结果{% endblock %}
+{% block content %}
+<html>
+<head>
+    <title>我的收藏</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>❤️ 我的收藏</h1>
+        <a href="/" class="back-btn">返回搜索</a>
+
+        {% if not favorites %}
+            <div class="no-favorites">
+                👜 收藏夹是空的，快去收藏喜欢的视频吧！
+            </div>
+        {% else %}
+            <table class="favorite-table">
+                <thead>
+                    <tr>
+                        <th>视频名称</th>
+                        <th>热度值</th>
+                        <th>视频链接</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in favorites %}
+                    <tr>
+                        <td>{{ item.title }}</td>
+                        <td>{{ "%.1f"|format(item.heat) }}</td>
+                        <td>
+                            <a href="https://www.bilibili.com/video/{{ item.bvid }}" target="_blank">
+                                观看视频
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+    </div>
+</body>
+</html>
+{% endblock %}
