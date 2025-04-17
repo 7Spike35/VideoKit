@@ -251,6 +251,15 @@
     </div>
 
     <script>
+        // 页面加载时检查 localStorage 中的用户名
+        window.onload = function() {
+            const username = localStorage.getItem('username');
+            if (username) {
+                console.log('Found username in localStorage:', username); // 调试
+                document.getElementById('login-register').textContent = username;
+            }
+        };
+
         // 打开登录/注册模态框
         document.getElementById('login-register').addEventListener('click', (e) => {
             e.preventDefault();
@@ -280,32 +289,29 @@
 
         // 显示成功提示模态框
         function showSuccessModal(message) {
-            console.log('Showing success modal with message:', message); // 调试信息
+            console.log('Showing success modal with message:', message); // 调试
             document.getElementById('success-message').textContent = message;
             document.getElementById('success-modal').classList.add('active');
         }
 
         // 关闭成功提示模态框
         function closeSuccessModal() {
-            console.log('Closing success modal'); // 调试信息
+            console.log('Closing success modal'); // 调试
             document.getElementById('success-modal').classList.remove('active');
         }
 
         // 为成功模态框的关闭按钮绑定事件
-        document.getElementById('success-modal-close').addEventListener('click', () => {
-            closeSuccessModal();
-            // 如果是登录成功后的关闭，确保导航条已更新
-            const username = document.getElementById('signin-username').value;
-            if (username && document.getElementById('login-modal').style.display === 'none') {
-                document.getElementById('login-register').textContent = username;
-            }
-        });
+        document.getElementById('success-modal-close').addEventListener('click', closeSuccessModal);
 
+        // 假登录
         function fakeLogin() {
             const username = document.getElementById('signin-username').value;
             if (username) {
-                console.log('Login successful, username:', username); // 调试信息
-                document.getElementById('login-register').textContent = username; // 更新导航条
+                console.log('Login successful, username:', username); // 调试
+                // 存储用户名到 localStorage
+                localStorage.setItem('username', username);
+                // 更新导航条
+                document.getElementById('login-register').textContent = username;
                 showSuccessModal(`登录成功！用户名: ${username}`);
                 closeLoginModal();
             } else {
@@ -313,6 +319,7 @@
             }
         }
 
+        // 假注册
         function fakeRegister() {
             const username = document.getElementById('signup-username').value;
             const password = document.getElementById('signup-password').value;
