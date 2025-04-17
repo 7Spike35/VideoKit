@@ -34,18 +34,18 @@
 
         .back-btn {
             text-decoration: none;
-            color: #00a1d6; /* 初始颜色改为主题蓝色 */
-            background-color: #fff; /* 确保背景为白色 */
+            color: #00a1d6;
+            background-color: #fff;
             font-size: 1.1em;
             padding: 8px 16px;
-            border: 1px solid #00a1d6; /* 添加蓝色边框 */
+            border: 1px solid #00a1d6;
             border-radius: 4px;
             transition: background-color 0.3s, color 0.3s;
         }
 
         .back-btn:hover {
-            background-color: #e0f7fa; /* 悬停时背景为浅蓝色 */
-            color: #0083b0; /* 悬停时文字稍深 */
+            background-color: #e0f7fa;
+            color: #0083b0;
         }
 
         .error {
@@ -199,7 +199,6 @@
                 </tbody>
             </table>
 
-            <!-- 分页导航 -->
             <div class="pagination" id="pagination">
                 <!-- 页码由 JavaScript 动态生成 -->
             </div>
@@ -214,7 +213,6 @@
                     const pagination = document.getElementById('pagination');
                     pagination.innerHTML = '';
 
-                    // 上一页
                     if (currentPage > 1) {
                         const prev = document.createElement('a');
                         prev.href = '#';
@@ -226,7 +224,6 @@
                         pagination.appendChild(prev);
                     }
 
-                    // 页码（限制显示范围）
                     const startPage = Math.max(1, currentPage - 2);
                     const endPage = Math.min(totalPages, currentPage + 2);
                     for (let i = startPage; i <= endPage; i++) {
@@ -243,7 +240,6 @@
                         pagination.appendChild(pageLink);
                     }
 
-                    // 下一页
                     if (currentPage < totalPages) {
                         const next = document.createElement('a');
                         next.href = '#';
@@ -257,6 +253,7 @@
                 }
 
                 function loadPage(page) {
+                    console.log(`Loading page ${page} for keywords: ${keywords}`);
                     fetch('/search_page', {
                         method: 'POST',
                         headers: {
@@ -268,75 +265,88 @@
                             items_per_page: ITEMS_PER_PAGE
                         })
                     })
-                    .then(response => response.json())
+                    .then(response => {
+                        console.log('Response status:', response.status);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
                     .then(data => {
+                        console.log('Received data:', data);
                         if (data.error) {
                             alert('加载分页数据失败：' + data.error);
                             return;
                         }
 
-                        // 更新表格
                         const tbody = document.getElementById('result-tbody');
                         tbody.innerHTML = '';
-                        data.results.forEach(item => {
-                            const tr = document.createElement('tr');
-                            tr.innerHTML = `
-                                <td class="video-title">${item.标题}</td>
-                                <td>${item.热度值.toFixed(1)}</td>
-                                <td><a href="https://www.bilibili.com/video/${item.bvid}" target="_blank">观看视频</a></td>
-                                <td>
-                                    <button class="collect-btn ${item.is_favorited ? 'collected' : ''}"
-                                            data-bvid="${item.bvid}"
-                                            data-title="${item.标题}"
-                                            data-heat="${item.热度值}">
-                                        ${item.is_favorited ? '❤️ 已收藏' : '♡ 收藏'}
-                                    </button>
-                                </td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
+                        if (data.results.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="4">无数据</td></tr>';
+                        } else {
+                            data.results.forEach(item => {
+                                const tr = document.createElement('tr');
+                                tr.innerHTML = `
+                                    <td class="video-title">${item.标题}</td>
+                                    <td>${item.热度值.toFixed(1)}</td>
+                                    <td><a href="https://www.bilibili.com/video/${item.bvid}" target="_blank">观看视频</a></td>
+                                    <td>
+                                        <button class="collect-btn ${item.is_favorited ? 'collected' : ''}"
+                                                data-bvid="${item.bvid}"
+                                                data-title="${item.标题}"
+                                                data-heat="${item.热度值}">
+                                            ${item.is_favorited ? '❤️ 已收藏' : '♡ 收藏'}
+                                        </button>
+                                    </td>
+                                `;
+                                tbody.appendChild(tr);
+                            });
+                        }
 
-                        // 重新绑定收藏按钮事件
                         bindCollectButtons();
-
-                        // 更新分页
                         renderPagination(page);
                     })
                     .catch(error => {
-                        console.error('Error:', error);
-                        alert('加载分页数据失败');
+                        console.error('Fetch error:', error);
+                        alert('加载分页数据失败，请检查网络或稍后重试');
                     });
                 }
 
-                // 初始渲染分页
-                renderPagination(1);
-
-                // 收藏按钮绑定
                 function bindCollectButtons() {
                     document.querySelectorAll('.collect-btn').forEach(button => {
                         button.addEventListener('click', () => {
                             const bvid = button.dataset.bvid;
                             const title = button.dataset.title;
                             const heat = button.dataset.heat;
-                            fetch('/add_favorite', {
+                            const isCollected = button.classList.contains('collected');
+                            const url = isCollected ? '/remove_favorite' : '/add_favorite';
+                            const body = isCollected ? { bvid } : { bvid, title, heat };
+
+                            fetch(url, {
                                 method: 'POST',
                                 headers: {
                                     'Content-Type': 'application/json',
                                 },
-                                body: JSON.stringify({ bvid, title, heat })
+                                body: JSON.stringify(body)
                             })
                             .then(response => response.json())
                             .then(data => {
                                 if (data.status === 'success') {
                                     button.classList.toggle('collected');
                                     button.textContent = button.classList.contains('collected') ? '❤️ 已收藏' : '♡ 收藏';
+                                } else {
+                                    alert(`${isCollected ? '取消收藏' : '添加收藏'}失败：${data.error || '未知错误'}`);
                                 }
+                            })
+                            .catch(error => {
+                                console.error('Collect error:', error);
+                                alert(`${isCollected ? '取消收藏' : '添加收藏'}失败，请检查网络或稍后重试`);
                             });
                         });
                     });
                 }
 
-                // 初始绑定收藏按钮
+                renderPagination(1);
                 bindCollectButtons();
             </script>
         {% endif %}

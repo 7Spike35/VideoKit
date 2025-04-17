@@ -1,11 +1,129 @@
 <!DOCTYPE html>
 {% extends "base.html" %}
-{% block title %}搜索结果{% endblock %}
+{% block title %}我的收藏{% endblock %}
 {% block content %}
 <html>
 <head>
     <title>我的收藏</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .back-btn {
+            text-decoration: none;
+            color: #00a1d6;
+            background-color: #fff;
+            font-size: 1.1em;
+            padding: 8px 16px;
+            border: 1px solid #00a1d6;
+            border-radius: 4px;
+            transition: background-color 0.3s, color 0.3s;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .back-btn:hover {
+            background-color: #e0f7fa;
+            color: #0083b0;
+        }
+
+        .no-favorites {
+            font-size: 1.2em;
+            color: #666;
+            margin: 20px 0;
+        }
+
+        .favorite-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .favorite-table th, .favorite-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .favorite-table th {
+            background-color: #f9f9f9;
+            font-size: 1.1em;
+            color: #333;
+        }
+
+        .favorite-table td {
+            font-size: 1em;
+            color: #666;
+        }
+
+        .video-title {
+            max-width: 400px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .favorite-table a {
+            color: #00a1d6;
+            text-decoration: none;
+        }
+
+        .favorite-table a:hover {
+            text-decoration: underline;
+        }
+
+        .remove-btn {
+            padding: 8px 16px;
+            font-size: 1em;
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .remove-btn:hover {
+            background-color: #ffebee;
+            color: #d32f2f;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .pagination a {
+            text-decoration: none;
+            color: #00a1d6;
+            padding: 8px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .pagination a.active {
+            background-color: #00a1d6;
+            color: white;
+            border-color: #00a1d6;
+        }
+
+        .pagination a:hover:not(.active) {
+            background-color: #e0f7fa;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -17,28 +135,186 @@
                 👜 收藏夹是空的，快去收藏喜欢的视频吧！
             </div>
         {% else %}
+            <div class="result-stats">
+                共 {{ total }} 项收藏
+            </div>
+
             <table class="favorite-table">
                 <thead>
                     <tr>
                         <th>视频名称</th>
                         <th>热度值</th>
                         <th>视频链接</th>
+                        <th>操作</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="favorite-tbody">
                     {% for item in favorites %}
                     <tr>
-                        <td>{{ item.title }}</td>
+                        <td class="video-title">{{ item.title }}</td>
                         <td>{{ "%.1f"|format(item.heat) }}</td>
                         <td>
                             <a href="https://www.bilibili.com/video/{{ item.bvid }}" target="_blank">
                                 观看视频
                             </a>
                         </td>
+                        <td>
+                            <button class="remove-btn" data-bvid="{{ item.bvid }}">取消收藏</button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
+
+            <div class="pagination" id="pagination">
+                <!-- 页码由 JavaScript 动态生成 -->
+            </div>
+
+            <script>
+                const ITEMS_PER_PAGE = 20;
+                let totalItems = {{ total }};
+                let totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+                let currentPage = 1;
+
+                function renderPagination(page) {
+                    const pagination = document.getElementById('pagination');
+                    pagination.innerHTML = '';
+
+                    if (page > 1) {
+                        const prev = document.createElement('a');
+                        prev.href = '#';
+                        prev.textContent = '«';
+                        prev.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            loadPage(page - 1);
+                        });
+                        pagination.appendChild(prev);
+                    }
+
+                    const startPage = Math.max(1, page - 2);
+                    const endPage = Math.min(totalPages, page + 2);
+                    for (let i = startPage; i <= endPage; i++) {
+                        const pageLink = document.createElement('a');
+                        pageLink.href = '#';
+                        pageLink.textContent = i;
+                        if (i === page) {
+                            pageLink.classList.add('active');
+                        }
+                        pageLink.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            loadPage(i);
+                        });
+                        pagination.appendChild(pageLink);
+                    }
+
+                    if (page < totalPages) {
+                        const next = document.createElement('a');
+                        next.href = '#';
+                        next.textContent = '»';
+                        next.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            loadPage(page + 1);
+                        });
+                        pagination.appendChild(next);
+                    }
+                }
+
+                function loadPage(page) {
+                    console.log(`Loading favorites page ${page}`);
+                    fetch('/favorites_page', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            page: page,
+                            items_per_page: ITEMS_PER_PAGE
+                        })
+                    })
+                    .then(response => {
+                        console.log('Response status:', response.status);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! Status: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Received data:', data);
+                        if (data.error) {
+                            alert('加载分页数据失败：' + data.error);
+                            return;
+                        }
+
+                        totalItems = data.total;
+                        totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+                        currentPage = page;
+
+                        const tbody = document.getElementById('favorite-tbody');
+                        tbody.innerHTML = '';
+                        if (data.favorites.length === 0) {
+                            tbody.innerHTML = '<tr><td colspan="4">无数据</td></tr>';
+                        } else {
+                            data.favorites.forEach(item => {
+                                const tr = document.createElement('tr');
+                                tr.innerHTML = `
+                                    <td class="video-title">${item.title}</td>
+                                    <td>${item.heat.toFixed(1)}</td>
+                                    <td><a href="https://www.bilibili.com/video/${item.bvid}" target="_blank">观看视频</a></td>
+                                    <td><button class="remove-btn" data-bvid="${item.bvid}">取消收藏</button></td>
+                                `;
+                                tbody.appendChild(tr);
+                            });
+                        }
+
+                        bindRemoveButtons();
+                        renderPagination(page);
+                    })
+                    .catch(error => {
+                        console.error('Fetch error:', error);
+                        alert('加载分页数据失败，请检查网络或稍后重试');
+                    });
+                }
+
+                function bindRemoveButtons() {
+                    document.querySelectorAll('.remove-btn').forEach(button => {
+                        button.addEventListener('click', () => {
+                            const bvid = button.dataset.bvid;
+                            fetch('/remove_favorite', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ bvid })
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.status === 'success') {
+                                    // 更新总数并重新加载当前页面
+                                    totalItems -= 1;
+                                    totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+                                    // 如果当前页为空，退到上一页
+                                    if (totalItems <= (currentPage - 1) * ITEMS_PER_PAGE && currentPage > 1) {
+                                        currentPage -= 1;
+                                    }
+                                    loadPage(currentPage);
+                                } else {
+                                    alert('取消收藏失败：' + (data.error || '未知错误'));
+                                }
+                            })
+                            .catch(error => {
+                                console.error('Remove error:', error);
+                                alert('取消收藏失败，请检查网络或稍后重试');
+                            });
+                        });
+                    });
+                }
+
+                // 初始渲染分页
+                if (totalItems > 0) {
+                    renderPagination(1);
+                    bindRemoveButtons();
+                }
+            </script>
         {% endif %}
     </div>
 </body>

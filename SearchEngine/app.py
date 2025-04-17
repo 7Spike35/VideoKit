@@ -19,7 +19,31 @@ def init_favorites():
 
 @app.route('/favorites')
 def show_favorites():
-    return render_template('favorite.html', favorites=session['favorites'])
+    favorites = session.get('favorites', [])
+    total = len(favorites)
+    paginated_favorites = favorites[:20]
+    return render_template('favorite.html', favorites=paginated_favorites, total=total)
+
+@app.route('/favorites_page', methods=['POST'])
+def favorites_page():
+    try:
+        data = request.json
+        page = int(data.get('page', 1))
+        items_per_page = int(data.get('items_per_page', 20))
+
+        favorites = session.get('favorites', [])
+        total = len(favorites)
+
+        start = (page - 1) * items_per_page
+        end = start + items_per_page
+        paginated_favorites = favorites[start:end]
+
+        return jsonify({
+            "favorites": paginated_favorites,
+            "total": total
+        })
+    except Exception as e:
+        return jsonify({"error": f"分页处理失败：{str(e)}"})
 
 @app.route('/add_favorite', methods=['POST'])
 def add_favorite():
@@ -34,6 +58,21 @@ def add_favorite():
         session.modified = True
     return {"status": "success"}
 
+@app.route('/remove_favorite', methods=['POST'])
+def remove_favorite():
+    try:
+        data = request.json
+        bvid = data.get('bvid')
+        if not bvid:
+            return jsonify({"error": "缺少 bvid 参数"})
+
+        favorites = session.get('favorites', [])
+        session['favorites'] = [item for item in favorites if item['bvid'] != bvid]
+        session.modified = True
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"error": f"取消收藏失败：{str(e)}"})
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -43,14 +82,17 @@ def search():
     keywords = request.form.get('keywords', '')
     keyword_list = [k.strip() for k in keywords.split('#') if k.strip()]
     try:
+        if os.path.exists(TEMP_CSV_PATH):
+            os.remove(TEMP_CSV_PATH)
         search_bilibili(keyword_list, max_page=5, out_file=TEMP_CSV_PATH)
         if not os.path.exists(TEMP_CSV_PATH):
             return render_template('result.html', error="爬虫未生成数据，请稍后再试")
         df = pd.read_csv(TEMP_CSV_PATH)
+        if df.empty:
+            return render_template('result.html', error="爬虫数据为空，请尝试其他关键词")
         results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
         result_data = results.to_dict(orient='records')
         total = len(result_data)
-        # 初始显示第一页（前 20 条）
         paginated_results = result_data[:20]
         favorites_bvid = [item['bvid'] for item in session.get('favorites', [])]
         return render_template(
@@ -61,7 +103,7 @@ def search():
             favorites_bvid=favorites_bvid
         )
     except Exception as e:
-        return render_template('result.html', error=str(e))
+        return render_template('result.html', error=f"搜索失败：{str(e)}")
 
 @app.route('/search_page', methods=['POST'])
 def search_page():
@@ -72,20 +114,23 @@ def search_page():
         items_per_page = int(data.get('items_per_page', 20))
         keyword_list = [k.strip() for k in keywords.split('#') if k.strip()]
 
-        # 读取爬虫生成的 CSV
+        if not keywords:
+            return jsonify({"error": "关键词为空"})
+
         if not os.path.exists(TEMP_CSV_PATH):
             return jsonify({"error": "数据文件不存在，请重新搜索"})
 
         df = pd.read_csv(TEMP_CSV_PATH)
+        if df.empty:
+            return jsonify({"error": "数据文件为空，请重新搜索"})
+
         results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
         result_data = results.to_dict(orient='records')
 
-        # 计算分页
         start = (page - 1) * items_per_page
         end = start + items_per_page
         paginated_results = result_data[start:end]
 
-        # 添加收藏状态
         favorites_bvid = [item['bvid'] for item in session.get('favorites', [])]
         for item in paginated_results:
             item['is_favorited'] = item['bvid'] in favorites_bvid
@@ -95,7 +140,7 @@ def search_page():
             "total": len(result_data)
         })
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return jsonify({"error": f"分页处理失败：{str(e)}"})
 
 if __name__ == '__main__':
     app.run(debug=True)
