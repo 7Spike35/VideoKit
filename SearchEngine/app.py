@@ -1,85 +1,101 @@
 from datetime import timedelta
-
-from flask import Flask, render_template, request, session
+from flask import Flask, render_template, request, session, jsonify
 import pandas as pd
-from search import weighted_search
-
-app = Flask(__name__)
-
-# 预加载数据
-CSV_PATH = r".\file\bilibili_result.csv"
-df = pd.read_csv(CSV_PATH)
+from search import weighted_search, search_bilibili
+import os
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 app.permanent_session_lifetime = timedelta(days=7)
 
+# 临时 CSV 文件路径
+TEMP_CSV_PATH = "temp_search_results.csv"
+
 @app.before_request
 def init_favorites():
-    # 只在session不存在时初始化
     if 'favorites' not in session:
-        session.permanent = True  # 启用持久会话
+        session.permanent = True
         session['favorites'] = []
 
-
-# 新增路由：收藏夹页面
 @app.route('/favorites')
 def show_favorites():
-    return render_template('favorite.html',
-                           favorites=session['favorites'])
-
+    return render_template('favorite.html', favorites=session['favorites'])
 
 @app.route('/add_favorite', methods=['POST'])
 def add_favorite():
     video_data = request.json
-
-    # 强制转换数据类型
     video_info = {
         "bvid": str(video_data['bvid']),
         "title": str(video_data['title']),
-        "heat": float(video_data['heat'])  # 关键修复：明确转换为 float
+        "heat": float(video_data['heat'])
     }
-
-    # 检查重复性
     if not any(item['bvid'] == video_info['bvid'] for item in session['favorites']):
         session['favorites'].append(video_info)
         session.modified = True
-
     return {"status": "success"}
 
 @app.route('/')
 def index():
-    """主搜索页面"""
     return render_template('index.html')
-
 
 @app.route('/search', methods=['POST'])
 def search():
-    """处理搜索请求"""
     keywords = request.form.get('keywords', '')
     keyword_list = [k.strip() for k in keywords.split('#') if k.strip()]
-
     try:
-        # 执行搜索
-        results = weighted_search(
-            query=keyword_list,
-            df=df.copy(),
-            top_n=5000  # 根据需求调整数量
-        )
-
-        # 转换为字典列表并添加序号
+        search_bilibili(keyword_list, max_page=5, out_file=TEMP_CSV_PATH)
+        if not os.path.exists(TEMP_CSV_PATH):
+            return render_template('result.html', error="爬虫未生成数据，请稍后再试")
+        df = pd.read_csv(TEMP_CSV_PATH)
+        results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
         result_data = results.to_dict(orient='records')
         total = len(result_data)
-
+        # 初始显示第一页（前 20 条）
+        paginated_results = result_data[:20]
+        favorites_bvid = [item['bvid'] for item in session.get('favorites', [])]
         return render_template(
             'result.html',
             keywords=keywords,
-            results=result_data,
-            total=total
+            results=paginated_results,
+            total=total,
+            favorites_bvid=favorites_bvid
         )
     except Exception as e:
         return render_template('result.html', error=str(e))
 
+@app.route('/search_page', methods=['POST'])
+def search_page():
+    try:
+        data = request.json
+        keywords = data.get('keywords', '')
+        page = int(data.get('page', 1))
+        items_per_page = int(data.get('items_per_page', 20))
+        keyword_list = [k.strip() for k in keywords.split('#') if k.strip()]
+
+        # 读取爬虫生成的 CSV
+        if not os.path.exists(TEMP_CSV_PATH):
+            return jsonify({"error": "数据文件不存在，请重新搜索"})
+
+        df = pd.read_csv(TEMP_CSV_PATH)
+        results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
+        result_data = results.to_dict(orient='records')
+
+        # 计算分页
+        start = (page - 1) * items_per_page
+        end = start + items_per_page
+        paginated_results = result_data[start:end]
+
+        # 添加收藏状态
+        favorites_bvid = [item['bvid'] for item in session.get('favorites', [])]
+        for item in paginated_results:
+            item['is_favorited'] = item['bvid'] in favorites_bvid
+
+        return jsonify({
+            "results": paginated_results,
+            "total": len(result_data)
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 if __name__ == '__main__':
     app.run(debug=True)

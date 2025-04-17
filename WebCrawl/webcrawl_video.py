@@ -8,7 +8,8 @@ headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
 
-video_url = input("输入视频的url:")
+video_BVID = input("输入视频的bvid:")
+video_url = 'https://www.bilibili.com/video/' + video_BVID
 response = requests.get(video_url, headers=headers)
 html = response.text
 

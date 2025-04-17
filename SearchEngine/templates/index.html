@@ -6,6 +6,8 @@
 <head>
     <title>B站视频搜索</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- 引入 Chart.js 用于饼图 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .container {
             max-width: 800px;
@@ -35,9 +37,9 @@
 
         .search-form {
             display: flex;
-            flex-direction: column; /* 改为垂直布局 */
-            align-items: center; /* 水平居中 */
-            gap: 20px; /* 输入框和按钮之间的间距 */
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
         }
 
         input[type="text"] {
@@ -55,7 +57,7 @@
         }
 
         .search-button {
-            width: 200px; /* 按钮宽度稍小，保持比例 */
+            width: 200px;
             padding: 12px 24px;
             font-size: 1.2em;
             background-color: #00a1d6;
@@ -69,6 +71,67 @@
         .search-button:hover {
             background-color: #0083b0;
         }
+
+        /* 热搜框样式 */
+        .hot-search {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+
+        .hot-search h3 {
+            font-size: 1.5em;
+            color: #333;
+            margin: 0 0 15px 0;
+        }
+
+        .hot-search ul {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .hot-search li {
+            display: inline-block;
+        }
+
+        .hot-search a {
+            text-decoration: none;
+            color: #00a1d6;
+            font-size: 1.1em;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .hot-search a:hover {
+            background-color: #e0f7fa;
+        }
+
+        /* 饼图框样式 */
+        .chart-container {
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+
+        .chart-container h3 {
+            font-size: 1.5em;
+            color: #333;
+            margin: 0 0 15px 0;
+        }
+
+        .chart-container canvas {
+            max-width: 300px;
+            margin: 0 auto;
+        }
     </style>
 </head>
 <body>
@@ -77,14 +140,76 @@
             <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
             <h1>增强搜索</h1>
         </div>
-        <form action="{{ url_for('search') }}" method="POST" class="search-form">
+        <form action="{{ url_for('search') }}" method="POST" class="search-form" id="search-form">
             <input type="text"
                    name="keywords"
                    placeholder="输入关键词（多个用#分隔）"
                    required>
             <button type="submit" class="search-button">搜索</button>
         </form>
+
+        <!-- 热搜框 -->
+        <div class="hot-search">
+            <h3>热搜关键词</h3>
+            <ul>
+                <li><a href="#" onclick="searchHot('搞笑视频')">搞笑视频</a></li>
+                <li><a href="#" onclick="searchHot('音乐MV')">音乐MV</a></li>
+                <li><a href="#" onclick="searchHot('游戏攻略')">游戏攻略</a></li>
+                <li><a href="#" onclick="searchHot('美食教程')">美食教程</a></li>
+                <li><a href="#" onclick="searchHot('科技评测')">科技评测</a></li>
+            </ul>
+        </div>
+
+        <!-- 饼图框 -->
+        <div class="chart-container">
+            <h3>搜索类型占比</h3>
+            <canvas id="search-type-chart"></canvas>
+        </div>
     </div>
+
+    <script>
+        // 热搜点击触发搜索
+        function searchHot(keyword) {
+            const form = document.getElementById('search-form');
+            const input = form.querySelector('input[name="keywords"]');
+            input.value = keyword;
+            form.submit();
+        }
+
+        // 初始化饼图
+        const ctx = document.getElementById('search-type-chart').getContext('2d');
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['搞笑', '音乐', '游戏', '美食', '科技'],
+                datasets: [{
+                    data: [30, 25, 20, 15, 10],
+                    backgroundColor: [
+                        '#00a1d6',
+                        '#ff6f61',
+                        '#6b7280',
+                        '#facc15',
+                        '#10b981'
+                    ],
+                    borderColor: '#fff',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: {
+                                size: 14
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
 </body>
 </html>
 {% endblock %}
