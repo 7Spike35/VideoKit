@@ -289,10 +289,8 @@
                             .then(response => response.json())
                             .then(data => {
                                 if (data.status === 'success') {
-                                    // 更新总数并重新加载当前页面
                                     totalItems -= 1;
                                     totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-                                    // 如果当前页为空，退到上一页
                                     if (totalItems <= (currentPage - 1) * ITEMS_PER_PAGE && currentPage > 1) {
                                         currentPage -= 1;
                                     }
@@ -309,7 +307,6 @@
                     });
                 }
 
-                // 初始渲染分页
                 if (totalItems > 0) {
                     renderPagination(1);
                     bindRemoveButtons();

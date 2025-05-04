@@ -123,6 +123,21 @@
             background-color: #e65a50;
         }
 
+        .analyze-btn {
+            padding: 8px 16px;
+            font-size: 1em;
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .analyze-btn:hover {
+            background-color: #e0f7fa;
+            color: #0083b0;
+        }
+
         .pagination {
             display: flex;
             justify-content: center;
@@ -174,6 +189,7 @@
                         <th>热度值</th>
                         <th>视频地址</th>
                         <th>收藏</th>
+                        <th>分析</th>
                     </tr>
                 </thead>
                 <tbody id="result-tbody">
@@ -193,6 +209,9 @@
                                     data-heat="{{ item.热度值 }}">
                                 {{ '❤️ 已收藏' if item.bvid in favorites_bvid else '♡ 收藏' }}
                             </button>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('analyze', bvid=item.bvid) }}" class="analyze-btn">📊 分析</a>
                         </td>
                     </tr>
                     {% endfor %}
@@ -282,7 +301,7 @@
                         const tbody = document.getElementById('result-tbody');
                         tbody.innerHTML = '';
                         if (data.results.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="4">无数据</td></tr>';
+                            tbody.innerHTML = '<tr><td colspan="5">无数据</td></tr>';
                         } else {
                             data.results.forEach(item => {
                                 const tr = document.createElement('tr');
@@ -297,6 +316,9 @@
                                                 data-heat="${item.热度值}">
                                             ${item.is_favorited ? '❤️ 已收藏' : '♡ 收藏'}
                                         </button>
+                                    </td>
+                                    <td>
+                                        <a href="/analyze/${item.bvid}" class="analyze-btn">📊 分析</a>
                                     </td>
                                 `;
                                 tbody.appendChild(tr);

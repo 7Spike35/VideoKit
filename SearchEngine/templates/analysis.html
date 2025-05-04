@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+{% extends "base.html" %}
+{% block title %}弹幕分析{% endblock %}
+{% block content %}
+<html>
+<head>
+    <title>弹幕分析</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .back-btn {
+            text-decoration: none;
+            color: #00a1d6;
+            background-color: #fff;
+            font-size: 1.1em;
+            padding: 8px 16px;
+            border: 1px solid #00a1d6;
+            border-radius: 4px;
+            transition: background-color 0.3s, color 0.3s;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .back-btn:hover {
+            background-color: #e0f7fa;
+            color: #0083b0;
+        }
+
+        .error {
+            color: #d32f2f;
+            font-size: 1.2em;
+            margin: 20px 0;
+        }
+
+        .analysis-section {
+            text-align: left;
+            margin-bottom: 30px;
+        }
+
+        .analysis-section h2 {
+            font-size: 1.8em;
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+
+        .analysis-section p {
+            font-size: 1.1em;
+            color: #666;
+            line-height: 1.6;
+            margin: 10px 0;
+        }
+
+        .sentiment-table {
+            width: 50%;
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+
+        .sentiment-table th, .sentiment-table td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+        }
+
+        .sentiment-table th {
+            background-color: #f9f9f9;
+            font-size: 1.1em;
+            color: #333;
+        }
+
+        .sentiment-table td {
+            font-size: 1em;
+            color: #666;
+        }
+
+        .keywords-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .keywords-list li {
+            font-size: 1.1em;
+            color: #666;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>弹幕分析 - 视频 {{ bvid }}</h1>
+        <a href="{{ url_for('search') }}" class="back-btn">返回搜索</a>
+
+        {% if error %}
+            <div class="error">
+                ⚠️ 分析出错：{{ error }}
+            </div>
+        {% else %}
+            <div class="analysis-section">
+                <h2>情感分布</h2>
+                <table class="sentiment-table">
+                    <thead>
+                        <tr>
+                            <th>情感</th>
+                            <th>百分比</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>积极</td>
+                            <td>{{ "%.1f"|format(analysis.sentiment.positive) }}%</td>
+                        </tr>
+                        <tr>
+                            <td>消极</td>
+                            <td>{{ "%.1f"|format(analysis.sentiment.negative) }}%</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p>共分析 {{ analysis.comment_count }} 条弹幕</p>
+            </div>
+
+            <div class="analysis-section">
+                <h2>主题关键词</h2>
+                <ul class="keywords-list">
+                    {% for keywords in analysis.keywords %}
+                        <li>{{ keywords }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="analysis-section">
+                <h2>内容摘要</h2>
+                <p>{{ analysis.summary | replace('\n', '<br>') }}</p>
+            </div>
+
+            <div class="analysis-section">
+                <h2>AI 分析</h2>
+                <p>{{ analysis.ai_analysis | replace('\n', '<br>') }}</p>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
+{% endblock %}
