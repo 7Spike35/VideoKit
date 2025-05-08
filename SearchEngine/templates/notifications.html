@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}消息通知{% endblock %}
+{% block content %}
+<div class="container">
+    <h1>🔔 消息通知</h1>
+    <a href="/favorites" class="back-btn">返回收藏夹</a>
+
+    {% if not notifications %}
+        <div class="no-notifications">
+            📪 暂无消息通知，快去收藏夹启用直播开播提醒吧！
+        </div>
+    {% else %}
+        <div class="result-stats">
+            共 {{ notifications|length }} 条通知
+        </div>
+        <table class="notification-table">
+            <thead>
+                <tr>
+                    <th>直播标题</th>
+                    <th>开播时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="notification-tbody">
+                {% for item in notifications %}
+                <tr>
+                    <td class="live-title">{{ item.title }}</td>
+                    <td>{{ item.timestamp | timestamp_to_datetime }}</td>
+                    <td>
+                        <a href="https://live.bilibili.com/{{ item.room_id }}" target="_blank" class="jump-btn">
+                            跳转直播间
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</div>
+
+<style>
+    .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 40px;
+        text-align: center;
+    }
+
+    h1 {
+        font-size: 2.5em;
+        color: #333;
+        margin-bottom: 20px;
+    }
+
+    .back-btn {
+        text-decoration: none;
+        color: #00a1d6;
+        background-color: #fff;
+        font-size: 1.1em;
+        padding: 8px 16px;
+        border: 1px solid #00a1d6;
+        border-radius: 4px;
+        transition: background-color 0.3s, color 0.3s;
+        display: inline-block;
+        margin-bottom: 20px;
+    }
+
+    .back-btn:hover {
+        background-color: #e0f7fa;
+        color: #0083b0;
+    }
+
+    .no-notifications {
+        font-size: 1.2em;
+        color: #666;
+        margin: 20px 0;
+    }
+
+    .result-stats {
+        font-size: 1.1em;
+        color: #666;
+        margin-bottom: 20px;
+    }
+
+    .notification-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+
+    .notification-table th, .notification-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .notification-table th {
+        background-color: #f9f9f9;
+        font-size: 1.1em;
+        color: #333;
+    }
+
+    .notification-table td {
+        font-size: 1em;
+        color: #666;
+    }
+
+    .live-title {
+        max-width: 400px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .jump-btn {
+        text-decoration: none;
+        color: #00a1d6;
+        padding: 8px 16px;
+        border: 1px solid #00a1d6;
+        border-radius: 4px;
+        transition: background-color 0.3s, color 0.3s;
+    }
+
+    .jump-btn:hover {
+        background-color: #e0f7fa;
+        color: #0083b0;
+    }
+</style>
+{% endblock %}

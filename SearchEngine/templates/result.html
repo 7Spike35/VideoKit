@@ -1,378 +1,474 @@
-<!DOCTYPE html>
 {% extends "base.html" %}
-{% block title %}B站视频搜索{% endblock %}
+{% block title %}B站搜索结果{% endblock %}
 {% block content %}
-<html>
-<head>
-    <title>搜索结果</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <style>
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 40px;
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 2.5em;
-            color: #333;
-            margin-bottom: 20px;
-        }
-
-        .search-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .search-meta p {
-            font-size: 1.2em;
-            color: #666;
-        }
-
-        .back-btn {
-            text-decoration: none;
-            color: #00a1d6;
-            background-color: #fff;
-            font-size: 1.1em;
-            padding: 8px 16px;
-            border: 1px solid #00a1d6;
-            border-radius: 4px;
-            transition: background-color 0.3s, color 0.3s;
-        }
-
-        .back-btn:hover {
-            background-color: #e0f7fa;
-            color: #0083b0;
-        }
-
-        .error {
-            color: #d32f2f;
-            font-size: 1.2em;
-            margin: 20px 0;
-        }
-
-        .result-stats {
-            font-size: 1.1em;
-            color: #666;
-            margin-bottom: 20px;
-        }
-
-        .result-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-
-        .result-table th, .result-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .result-table th {
-            background-color: #f9f9f9;
-            font-size: 1.1em;
-            color: #333;
-        }
-
-        .result-table td {
-            font-size: 1em;
-            color: #666;
-        }
-
-        .video-title {
-            max-width: 400px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .result-table a {
-            color: #00a1d6;
-            text-decoration: none;
-        }
-
-        .result-table a:hover {
-            text-decoration: underline;
-        }
-
-        .collect-btn {
-            padding: 8px 16px;
-            font-size: 1em;
-            background-color: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .collect-btn.collected {
-            background-color: #ff6f61;
-            color: white;
-            border-color: #ff6f61;
-        }
-
-        .collect-btn:hover {
-            background-color: #e0f7fa;
-        }
-
-        .collect-btn.collected:hover {
-            background-color: #e65a50;
-        }
-
-        .analyze-btn {
-            padding: 8px 16px;
-            font-size: 1em;
-            background-color: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .analyze-btn:hover {
-            background-color: #e0f7fa;
-            color: #0083b0;
-        }
-
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        .pagination a {
-            text-decoration: none;
-            color: #00a1d6;
-            padding: 8px 12px;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            transition: background-color 0.3s;
-        }
-
-        .pagination a.active {
-            background-color: #00a1d6;
-            color: white;
-            border-color: #00a1d6;
-        }
-
-        .pagination a:hover:not(.active) {
-            background-color: #e0f7fa;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>搜索结果</h1>
-        <div class="search-meta">
-            <p>当前关键词：{{ keywords }}</p>
-            <a href="/" class="back-btn">返回搜索</a>
-        </div>
-
-        {% if error %}
-            <div class="error">
-                ⚠️ 搜索出错：{{ error }}
-            </div>
-        {% else %}
-            <div class="result-stats">
-                共 {{ total }} 项数据
-            </div>
-
-            <table class="result-table">
-                <thead>
-                    <tr>
-                        <th>视频名称</th>
-                        <th>热度值</th>
-                        <th>视频地址</th>
-                        <th>收藏</th>
-                        <th>分析</th>
-                    </tr>
-                </thead>
-                <tbody id="result-tbody">
-                    {% for item in results %}
-                    <tr>
-                        <td class="video-title">{{ item.标题 }}</td>
-                        <td>{{ "%.1f"|format(item.热度值) }}</td>
-                        <td>
-                            <a href="https://www.bilibili.com/video/{{ item.bvid }}" target="_blank">
-                                观看视频
-                            </a>
-                        </td>
-                        <td>
-                            <button class="collect-btn {{ 'collected' if item.bvid in favorites_bvid else '' }}"
-                                    data-bvid="{{ item.bvid }}"
-                                    data-title="{{ item.标题 }}"
-                                    data-heat="{{ item.热度值 }}">
-                                {{ '❤️ 已收藏' if item.bvid in favorites_bvid else '♡ 收藏' }}
-                            </button>
-                        </td>
-                        <td>
-                            <a href="{{ url_for('analyze', bvid=item.bvid) }}" class="analyze-btn">📊 分析</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-
-            <div class="pagination" id="pagination">
-                <!-- 页码由 JavaScript 动态生成 -->
-            </div>
-
-            <script>
-                const ITEMS_PER_PAGE = 20;
-                const totalItems = {{ total }};
-                const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
-                const keywords = "{{ keywords | safe }}";
-
-                function renderPagination(currentPage) {
-                    const pagination = document.getElementById('pagination');
-                    pagination.innerHTML = '';
-
-                    if (currentPage > 1) {
-                        const prev = document.createElement('a');
-                        prev.href = '#';
-                        prev.textContent = '«';
-                        prev.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            loadPage(currentPage - 1);
-                        });
-                        pagination.appendChild(prev);
-                    }
-
-                    const startPage = Math.max(1, currentPage - 2);
-                    const endPage = Math.min(totalPages, currentPage + 2);
-                    for (let i = startPage; i <= endPage; i++) {
-                        const pageLink = document.createElement('a');
-                        pageLink.href = '#';
-                        pageLink.textContent = i;
-                        if (i === currentPage) {
-                            pageLink.classList.add('active');
-                        }
-                        pageLink.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            loadPage(i);
-                        });
-                        pagination.appendChild(pageLink);
-                    }
-
-                    if (currentPage < totalPages) {
-                        const next = document.createElement('a');
-                        next.href = '#';
-                        next.textContent = '»';
-                        next.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            loadPage(currentPage + 1);
-                        });
-                        pagination.appendChild(next);
-                    }
-                }
-
-                function loadPage(page) {
-                    console.log(`Loading page ${page} for keywords: ${keywords}`);
-                    fetch('/search_page', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            keywords: keywords,
-                            page: page,
-                            items_per_page: ITEMS_PER_PAGE
-                        })
-                    })
-                    .then(response => {
-                        console.log('Response status:', response.status);
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! Status: ${response.status}`);
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        console.log('Received data:', data);
-                        if (data.error) {
-                            alert('加载分页数据失败：' + data.error);
-                            return;
-                        }
-
-                        const tbody = document.getElementById('result-tbody');
-                        tbody.innerHTML = '';
-                        if (data.results.length === 0) {
-                            tbody.innerHTML = '<tr><td colspan="5">无数据</td></tr>';
-                        } else {
-                            data.results.forEach(item => {
-                                const tr = document.createElement('tr');
-                                tr.innerHTML = `
-                                    <td class="video-title">${item.标题}</td>
-                                    <td>${item.热度值.toFixed(1)}</td>
-                                    <td><a href="https://www.bilibili.com/video/${item.bvid}" target="_blank">观看视频</a></td>
-                                    <td>
-                                        <button class="collect-btn ${item.is_favorited ? 'collected' : ''}"
-                                                data-bvid="${item.bvid}"
-                                                data-title="${item.标题}"
-                                                data-heat="${item.热度值}">
-                                            ${item.is_favorited ? '❤️ 已收藏' : '♡ 收藏'}
-                                        </button>
-                                    </td>
-                                    <td>
-                                        <a href="/analyze/${item.bvid}" class="analyze-btn">📊 分析</a>
-                                    </td>
-                                `;
-                                tbody.appendChild(tr);
-                            });
-                        }
-
-                        bindCollectButtons();
-                        renderPagination(page);
-                    })
-                    .catch(error => {
-                        console.error('Fetch error:', error);
-                        alert('加载分页数据失败，请检查网络或稍后重试');
-                    });
-                }
-
-                function bindCollectButtons() {
-                    document.querySelectorAll('.collect-btn').forEach(button => {
-                        button.addEventListener('click', () => {
-                            const bvid = button.dataset.bvid;
-                            const title = button.dataset.title;
-                            const heat = button.dataset.heat;
-                            const isCollected = button.classList.contains('collected');
-                            const url = isCollected ? '/remove_favorite' : '/add_favorite';
-                            const body = isCollected ? { bvid } : { bvid, title, heat };
-
-                            fetch(url, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify(body)
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.status === 'success') {
-                                    button.classList.toggle('collected');
-                                    button.textContent = button.classList.contains('collected') ? '❤️ 已收藏' : '♡ 收藏';
-                                } else {
-                                    alert(`${isCollected ? '取消收藏' : '添加收藏'}失败：${data.error || '未知错误'}`);
-                                }
-                            })
-                            .catch(error => {
-                                console.error('Collect error:', error);
-                                alert(`${isCollected ? '取消收藏' : '添加收藏'}失败，请检查网络或稍后重试`);
-                            });
-                        });
-                    });
-                }
-
-                renderPagination(1);
-                bindCollectButtons();
-            </script>
-        {% endif %}
+<div class="container">
+    <h1>搜索结果</h1>
+    <div class="search-meta">
+        <p>当前关键词：{{ keywords }}</p>
+        <a href="/" class="back-btn">返回搜索</a>
     </div>
-</body>
-</html>
+
+    {% if error %}
+        <div class="error">
+            ⚠️ 搜索出错：{{ error }}
+        </div>
+    {% else %}
+        <!-- 视频结果 -->
+        <div class="section-title">视频结果</div>
+        <div class="result-stats">
+            共 {{ video_total }} 项视频数据
+        </div>
+        {% if video_results %}
+        <table class="result-table">
+            <thead>
+                <tr>
+                    <th>视频名称</th>
+                    <th>热度值</th>
+                    <th>视频地址</th>
+                    <th>收藏</th>
+                    <th>分析</th>
+                </tr>
+            </thead>
+            <tbody id="video-result-tbody">
+                {% for item in video_results %}
+                <tr>
+                    <td class="video-title">{{ item.标题 }}</td>
+                    <td>{{ "%.1f"|format(item.热度值) }}</td>
+                    <td>
+                        <a href="https://www.bilibili.com/video/{{ item.bvid }}" target="_blank">
+                            观看视频
+                        </a>
+                    </td>
+                    <td>
+                        <button class="collect-btn {{ 'collected' if item.bvid in favorites_bvid else '' }}"
+                                data-id="{{ item.bvid }}"
+                                data-title="{{ item.标题 }}"
+                                data-heat="{{ item.热度值 }}"
+                                data-type="video">
+                            {{ '❤️ 已收藏' if item.bvid in favorites_bvid else '♡ 收藏' }}
+                        </button>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('analyze', bvid=item.bvid) }}" class="analyze-btn">📊 分析</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="pagination" id="video-pagination"></div>
+        {% else %}
+        <div class="error">无视频结果</div>
+        {% endif %}
+
+        <!-- 直播结果 -->
+        <div class="section-title">直播结果</div>
+        <div class="result-stats">
+            共 {{ live_total }} 项直播数据
+        </div>
+        {% if live_results %}
+        <table class="result-table">
+            <thead>
+                <tr>
+                    <th>直播标题</th>
+                    <th>人气</th>
+                    <th>主播</th>
+                    <th>直播地址</th>
+                    <th>收藏</th>
+                </tr>
+            </thead>
+            <tbody id="live-result-tbody">
+                {% for item in live_results %}
+                <tr>
+                    <td class="video-title">{{ item.标题 }}</td>
+                    <td>{{ item.人气 }}</td>
+                    <td>{{ item.主播 }}</td>
+                    <td>
+                        <a href="https://live.bilibili.com/{{ item.room_id }}" target="_blank">
+                            观看直播
+                        </a>
+                    </td>
+                    <td>
+                        <button class="collect-btn {{ 'collected' if item.room_id|string in favorites_room_id else '' }}"
+                                data-id="{{ item.room_id }}"
+                                data-title="{{ item.标题 }}"
+                                data-heat="{{ item.人气 }}"
+                                data-type="live">
+                            {{ '❤️ 已收藏' if item.room_id|string in favorites_room_id else '♡ 收藏' }}
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="pagination" id="live-pagination"></div>
+        {% else %}
+        <div class="error">无直播结果</div>
+        {% endif %}
+    {% endif %}
+</div>
+
+<style>
+    .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 40px;
+        text-align: center;
+    }
+
+    h1 {
+        font-size: 2.5em;
+        color: #333;
+        margin-bottom: 20px;
+    }
+
+    .search-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .search-meta p {
+        font-size: 1.2em;
+        color: #666;
+    }
+
+    .back-btn {
+        text-decoration: none;
+        color: #00a1d6;
+        background-color: #fff;
+        font-size: 1.1em;
+        padding: 8px 16px;
+        border: 1px solid #00a1d6;
+        border-radius: 4px;
+        transition: background-color 0.3s, color 0.3s;
+    }
+
+    .back-btn:hover {
+        background-color: #e0f7fa;
+        color: #0083b0;
+    }
+
+    .error {
+        color: #d32f2f;
+        font-size: 1.2em;
+        margin: 20px 0;
+    }
+
+    .result-stats {
+        font-size: 1.1em;
+        color: #666;
+        margin-bottom: 20px;
+    }
+
+    .result-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+
+    .result-table th, .result-table td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .result-table th {
+        background-color: #f9f9f9;
+        font-size: 1.1em;
+        color: #333;
+    }
+
+    .result-table td {
+        font-size: 1em;
+        color: #666;
+    }
+
+    .video-title {
+        max-width: 400px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .result-table a {
+        color: #00a1d6;
+        text-decoration: none;
+    }
+
+    .result-table a:hover {
+        text-decoration: underline;
+    }
+
+    .collect-btn {
+        padding: 8px 16px;
+        font-size: 1em;
+        background-color: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .collect-btn.collected {
+        background-color: #ff6f61;
+        color: white;
+        border-color: #ff6f61;
+    }
+
+    .collect-btn:hover {
+        background-color: #e0f7fa;
+    }
+
+    .collect-btn.collected:hover {
+        background-color: #e65a50;
+    }
+
+    .analyze-btn {
+        padding: 8px 16px;
+        font-size: 1em;
+        background-color: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+    .analyze-btn:hover {
+        background-color: #e0f7fa;
+        color: #0083b0;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .pagination a {
+        text-decoration: none;
+        color: #00a1d6;
+        padding: 8px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        transition: background-color 0.3s;
+    }
+
+    .pagination a.active {
+        background-color: #00a1d6;
+        color: white;
+        border-color: #00a1d6;
+    }
+
+    .pagination a:hover:not(.active) {
+        background-color: #e0f7fa;
+    }
+
+    .section-title {
+        font-size: 1.8em;
+        color: #333;
+        margin: 30px 0 15px;
+    }
+</style>
+
+<script>
+    const ITEMS_PER_PAGE = 10; // 修改为每页10条
+    const videoTotalItems = {{ video_total }};
+    const liveTotalItems = {{ live_total }};
+    const videoTotalPages = Math.ceil(videoTotalItems / ITEMS_PER_PAGE);
+    const liveTotalPages = Math.ceil(liveTotalItems / ITEMS_PER_PAGE);
+    const keywords = "{{ keywords | safe }}";
+
+    function renderPagination(containerId, currentPage, totalPages, type) {
+        const pagination = document.getElementById(containerId);
+        pagination.innerHTML = '';
+
+        if (currentPage > 1) {
+            const prev = document.createElement('a');
+            prev.href = '#';
+            prev.textContent = '«';
+            prev.addEventListener('click', (e) => {
+                e.preventDefault();
+                loadPage(currentPage - 1, type);
+            });
+            pagination.appendChild(prev);
+        }
+
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
+        for (let i = startPage; i <= endPage; i++) {
+            const pageLink = document.createElement('a');
+            pageLink.href = '#';
+            pageLink.textContent = i;
+            if (i === currentPage) {
+                pageLink.classList.add('active');
+            }
+            pageLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                loadPage(i, type);
+            });
+            pagination.appendChild(pageLink);
+        }
+
+        if (currentPage < totalPages) {
+            const next = document.createElement('a');
+            next.href = '#';
+            next.textContent = '»';
+            next.addEventListener('click', (e) => {
+                e.preventDefault();
+                loadPage(currentPage + 1, type);
+            });
+            pagination.appendChild(next);
+        }
+    }
+
+    function loadPage(page, type) {
+        console.log(`Loading ${type} page ${page} for keywords: ${keywords}`);
+        fetch('/search_page', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                keywords: keywords,
+                page: page,
+                items_per_page: ITEMS_PER_PAGE,
+                type: type
+            })
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Received data:', data);
+            if (data.error) {
+                alert('加载分页数据失败：' + data.error);
+                return;
+            }
+
+            const tbody = document.getElementById(`${type}-result-tbody`);
+            tbody.innerHTML = '';
+            if (data.results.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${type === 'video' ? 5 : 5}">无数据</td></tr>`;
+            } else {
+                data.results.forEach(item => {
+                    const tr = document.createElement('tr');
+                    const id = type === 'video' ? item.bvid : item.room_id;
+                    const isFavorited = item.is_favorited;
+                    if (type === 'video') {
+                        tr.innerHTML = `
+                            <td class="video-title">${item.标题}</td>
+                            <td>${item.热度值.toFixed(1)}</td>
+                            <td><a href="https://www.bilibili.com/video/${item.bvid}" target="_blank">观看视频</a></td>
+                            <td>
+                                <button class="collect-btn ${isFavorited ? 'collected' : ''}"
+                                        data-id="${item.bvid}"
+                                        data-title="${item.标题}"
+                                        data-heat="${item.热度值}"
+                                        data-type="video">
+                                    ${isFavorited ? '❤️ 已收藏' : '♡ 收藏'}
+                                </button>
+                            </td>
+                            <td>
+                                <a href="/analyze/${item.bvid}" class="analyze-btn">📊 分析</a>
+                            </td>
+                        `;
+                    } else {
+                        tr.innerHTML = `
+                            <td class="video-title">${item.标题}</td>
+                            <td>${item.人气}</td>
+                            <td>${item.主播}</td>
+                            <td><a href="https://live.bilibili.com/${item.room_id}" target="_blank">观看直播</a></td>
+                            <td>
+                                <button class="collect-btn ${isFavorited ? 'collected' : ''}"
+                                        data-id="${item.room_id}"
+                                        data-title="${item.标题}"
+                                        data-heat="${item.人气}"
+                                        data-type="live">
+                                    ${isFavorited ? '❤️ 已收藏' : '♡ 收藏'}
+                                </button>
+                            </td>
+                        `;
+                    }
+                    tbody.appendChild(tr);
+                });
+            }
+
+            bindCollectButtons();
+            renderPagination(`${type}-pagination`, page, type === 'video' ? videoTotalPages : liveTotalPages, type);
+        })
+        .catch(error => {
+            console.error('Fetch error:', error);
+            alert('加载分页数据失败，请检查网络或稍后重试');
+        });
+    }
+
+    function bindCollectButtons() {
+        // 使用事件委托，绑定到表格容器
+        document.querySelectorAll('#video-result-tbody, #live-result-tbody').forEach(tbody => {
+            tbody.addEventListener('click', (e) => {
+                const button = e.target.closest('.collect-btn');
+                if (!button) return;
+
+                // 防止重复点击
+                if (button.disabled) return;
+                button.disabled = true;
+
+                const id = button.dataset.id;
+                const title = button.dataset.title;
+                const heat = button.dataset.heat;
+                const type = button.dataset.type;
+                const isCollected = button.classList.contains('collected');
+                const url = isCollected ? '/remove_favorite' : '/add_favorite';
+                const body = isCollected ? { id, type } : { id, title, heat, type };
+
+                console.log(`Sending ${isCollected ? 'remove' : 'add'} favorite request for ${type} with id: ${id}`);
+
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(body)
+                })
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Received data:', data);
+                    if (data.status === 'success') {
+                        button.classList.toggle('collected');
+                        button.textContent = button.classList.contains('collected') ? '❤️ 已收藏' : '♡ 收藏';
+                        console.log(`Button updated for ${type} id: ${id}, collected: ${button.classList.contains('collected')}`);
+                    } else {
+                        alert(`${isCollected ? '取消收藏' : '添加收藏'}失败：${data.error || '未知错误'}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Collect error:', error);
+                    alert(`${isCollected ? '取消收藏' : '添加收藏'}失败，请检查网络或稍后重试`);
+                })
+                .finally(() => {
+                    button.disabled = false;
+                });
+            });
+        });
+    }
+
+    if (videoTotalItems > 0) {
+        renderPagination('video-pagination', 1, videoTotalPages, 'video');
+        bindCollectButtons();
+    }
+    if (liveTotalItems > 0) {
+        renderPagination('live-pagination', 1, liveTotalPages, 'live');
+        bindCollectButtons();
+    }
+</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'93c73fe74c8978c6',t:'MTc0NjY4OTQwNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading' !==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 {% endblock %}

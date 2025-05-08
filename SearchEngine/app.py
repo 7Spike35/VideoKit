@@ -12,29 +12,49 @@ app.permanent_session_lifetime = timedelta(days=7)
 
 # 临时 CSV 文件路径
 TEMP_CSV_PATH = "temp_search_results.csv"
+TEMP_LIVE_CSV_PATH = "temp_live_results.csv"
 COMMENTS_CSV_PATH = "comments.csv"
+
 
 @app.before_request
 def init_favorites():
-    if 'favorites' not in session:
+    if 'video_favorites' not in session:
         session.permanent = True
-        session['favorites'] = []
+        session['video_favorites'] = []
+    if 'live_favorites' not in session:
+        session.permanent = True
+        session['live_favorites'] = []
+
 
 @app.route('/favorites')
 def show_favorites():
-    favorites = session.get('favorites', [])
-    total = len(favorites)
-    paginated_favorites = favorites[:20]
-    return render_template('favorite.html', favorites=paginated_favorites, total=total)
+    video_favorites = session.get('video_favorites', [])
+    live_favorites = session.get('live_favorites', [])
+    video_total = len(video_favorites)
+    live_total = len(live_favorites)
+    paginated_video_favorites = video_favorites[:10]
+    paginated_live_favorites = live_favorites[:10]
+    return render_template(
+        'favorite.html',
+        video_favorites=paginated_video_favorites,
+        live_favorites=paginated_live_favorites,
+        video_total=video_total,
+        live_total=live_total
+    )
+
 
 @app.route('/favorites_page', methods=['POST'])
 def favorites_page():
     try:
         data = request.json
         page = int(data.get('page', 1))
-        items_per_page = int(data.get('items_per_page', 20))
+        items_per_page = int(data.get('items_per_page', 10))
+        fav_type = data.get('type', 'video')  # 'video' or 'live'
 
-        favorites = session.get('favorites', [])
+        if fav_type == 'video':
+            favorites = session.get('video_favorites', [])
+        else:
+            favorites = session.get('live_favorites', [])
         total = len(favorites)
 
         start = (page - 1) * items_per_page
@@ -48,37 +68,60 @@ def favorites_page():
     except Exception as e:
         return jsonify({"error": f"分页处理失败：{str(e)}"})
 
+
 @app.route('/add_favorite', methods=['POST'])
 def add_favorite():
-    video_data = request.json
-    video_info = {
-        "bvid": str(video_data['bvid']),
-        "title": str(video_data['title']),
-        "heat": float(video_data['heat'])
+    data = request.json
+    id = str(data['id'])
+    fav_type = data.get('type', 'video')
+    favorite_info = {
+        "id": id,
+        "title": str(data['title']),
+        "heat": float(data['heat'])
     }
-    if not any(item['bvid'] == video_info['bvid'] for item in session['favorites']):
-        session['favorites'].append(video_info)
-        session.modified = True
+
+    if fav_type == 'video':
+        favorites = session.get('video_favorites', [])
+        if not any(item['id'] == id for item in favorites):
+            favorites.append(favorite_info)
+            session['video_favorites'] = favorites
+            session.modified = True
+    else:  # live
+        favorites = session.get('live_favorites', [])
+        if not any(item['id'] == id for item in favorites):
+            favorites.append(favorite_info)
+            session['live_favorites'] = favorites
+            session.modified = True
+
     return {"status": "success"}
+
 
 @app.route('/remove_favorite', methods=['POST'])
 def remove_favorite():
     try:
         data = request.json
-        bvid = data.get('bvid')
-        if not bvid:
-            return jsonify({"error": "缺少 bvid 参数"})
+        id = data.get('id')
+        fav_type = data.get('type', 'video')
+        if not id:
+            return jsonify({"error": "缺少 ID 参数"})
 
-        favorites = session.get('favorites', [])
-        session['favorites'] = [item for item in favorites if item['bvid'] != bvid]
+        if fav_type == 'video':
+            favorites = session.get('video_favorites', [])
+            session['video_favorites'] = [item for item in favorites if item['id'] != id]
+        else:  # live
+            favorites = session.get('live_favorites', [])
+            session['live_favorites'] = [item for item in favorites if item['id'] != id]
+
         session.modified = True
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"error": f"取消收藏失败：{str(e)}"})
 
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
 
 @app.route('/search', methods=['GET', 'POST'])
 def search():
@@ -94,28 +137,67 @@ def search():
         if not keyword_list:
             return render_template('result.html', error="无关键词，请输入搜索内容")
 
+        # 删除旧的临时文件
         if os.path.exists(TEMP_CSV_PATH):
             os.remove(TEMP_CSV_PATH)
-        search_bilibili(keyword_list, max_page=5, out_file=TEMP_CSV_PATH)
+        if os.path.exists(TEMP_LIVE_CSV_PATH):
+            os.remove(TEMP_LIVE_CSV_PATH)
+
+        # 爬取视频和直播数据
+        search_bilibili(keyword_list, max_page=5, video_out_file=TEMP_CSV_PATH, live_out_file=TEMP_LIVE_CSV_PATH)
+
+        # 处理视频结果
         if not os.path.exists(TEMP_CSV_PATH):
-            return render_template('result.html', error="爬虫未生成数据，请稍后再试")
-        df = pd.read_csv(TEMP_CSV_PATH)
-        if df.empty:
-            return render_template('result.html', error="爬虫数据为空，请尝试其他关键词")
-        results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
-        result_data = results.to_dict(orient='records')
-        total = len(result_data)
-        paginated_results = result_data[:20]
-        favorites_bvid = [item['bvid'] for item in session.get('favorites', [])]
+            video_error = "视频爬虫未生成数据，请稍后再试"
+            video_results = []
+            video_total = 0
+        else:
+            df = pd.read_csv(TEMP_CSV_PATH)
+            if df.empty:
+                video_error = "视频爬虫数据为空，请尝试其他关键词"
+                video_results = []
+                video_total = 0
+            else:
+                video_error = None
+                results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
+                video_results = results.to_dict(orient='records')
+                video_total = len(video_results)
+
+        # 处理直播结果
+        if not os.path.exists(TEMP_LIVE_CSV_PATH):
+            live_error = "直播爬虫未生成数据，请稍后再试"
+            live_results = []
+            live_total = 0
+        else:
+            live_df = pd.read_csv(TEMP_LIVE_CSV_PATH)
+            if live_df.empty:
+                live_error = "直播爬虫数据为空，请尝试其他关键词"
+                live_results = []
+                live_total = 0
+            else:
+                live_error = None
+                live_results = live_df.to_dict(orient='records')
+                live_total = len(live_results)
+
+        # 如果两者都出错，返回错误页面
+        if video_error and live_error:
+            return render_template('result.html', error=f"{video_error}；{live_error}")
+
+        favorites_bvid = [item['id'] for item in session.get('video_favorites', [])]
+        favorites_room_id = [item['id'] for item in session.get('live_favorites', [])]
         return render_template(
             'result.html',
             keywords=keywords,
-            results=paginated_results,
-            total=total,
-            favorites_bvid=favorites_bvid
+            video_results=video_results[:10],
+            video_total=video_total,
+            live_results=live_results[:10],
+            live_total=live_total,
+            favorites_bvid=favorites_bvid,
+            favorites_room_id=favorites_room_id
         )
     except Exception as e:
         return render_template('result.html', error=f"搜索失败：{str(e)}")
+
 
 @app.route('/search_page', methods=['POST'])
 def search_page():
@@ -123,29 +205,39 @@ def search_page():
         data = request.json
         keywords = data.get('keywords', '')
         page = int(data.get('page', 1))
-        items_per_page = int(data.get('items_per_page', 20))
+        items_per_page = int(data.get('items_per_page', 10))
+        result_type = data.get('type', 'video')  # 'video' or 'live'
+
         keyword_list = [k.strip() for k in keywords.split('#') if k.strip()]
 
         if not keywords:
             return jsonify({"error": "关键词为空"})
 
-        if not os.path.exists(TEMP_CSV_PATH):
-            return jsonify({"error": "数据文件不存在，请重新搜索"})
-
-        df = pd.read_csv(TEMP_CSV_PATH)
-        if df.empty:
-            return jsonify({"error": "数据文件为空，请重新搜索"})
-
-        results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
-        result_data = results.to_dict(orient='records')
+        if result_type == 'video':
+            if not os.path.exists(TEMP_CSV_PATH):
+                return jsonify({"error": "视频数据文件不存在，请重新搜索"})
+            df = pd.read_csv(TEMP_CSV_PATH)
+            if df.empty:
+                return jsonify({"error": "视频数据文件为空，请重新搜索"})
+            results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
+            result_data = results.to_dict(orient='records')
+            favorites = session.get('video_favorites', [])
+        else:  # live
+            if not os.path.exists(TEMP_LIVE_CSV_PATH):
+                return jsonify({"error": "直播数据文件不存在，请重新搜索"})
+            df = pd.read_csv(TEMP_LIVE_CSV_PATH)
+            if df.empty:
+                return jsonify({"error": "直播数据文件为空，请重新搜索"})
+            result_data = df.to_dict(orient='records')
+            favorites = session.get('live_favorites', [])
 
         start = (page - 1) * items_per_page
         end = start + items_per_page
         paginated_results = result_data[start:end]
 
-        favorites_bvid = [item['bvid'] for item in session.get('favorites', [])]
+        favorites_ids = [item['id'] for item in favorites]
         for item in paginated_results:
-            item['is_favorited'] = item['bvid'] in favorites_bvid
+            item['is_favorited'] = (item['bvid'] if result_type == 'video' else str(item['room_id'])) in favorites_ids
 
         return jsonify({
             "results": paginated_results,
@@ -153,6 +245,7 @@ def search_page():
         })
     except Exception as e:
         return jsonify({"error": f"分页处理失败：{str(e)}"})
+
 
 @app.route('/analyze/<bvid>')
 def analyze(bvid):
@@ -176,9 +269,11 @@ def analyze(bvid):
         if 'error' in analysis_result:
             return render_template('analysis.html', error=analysis_result['error'])
 
-        return render_template('analysis.html', analysis=analysis_result, bvid=bvid, keywords=session.get('last_keywords', ''))
+        return render_template('analysis.html', analysis=analysis_result, bvid=bvid,
+                               keywords=session.get('last_keywords', ''))
     except Exception as e:
         return render_template('analysis.html', error=f"分析失败：{str(e)}")
+
 
 if __name__ == '__main__':
     app.run(debug=True)
