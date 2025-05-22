@@ -19,11 +19,60 @@
             font-size: 1.2em;
             padding: 8px 16px;
             transition: background-color 0.3s;
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
 
         .main-nav a:hover {
             background-color: #0083b0;
             border-radius: 4px;
+        }
+
+        .live-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #ff4d4f;
+            border-radius: 50%;
+        }
+
+        .tooltip {
+            visibility: hidden;
+            opacity: 0;
+            background-color: #005c7a;
+            color: #fff;
+            text-align: center;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%) translateY(0);
+            white-space: nowrap;
+            font-size: 0.95em;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            transition: opacity 0.2s, transform 0.2s;
+            z-index: 100;
+        }
+
+        .tooltip::before {
+            content: '';
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-bottom-color: #005c7a;
+        }
+
+        .main-nav a:hover .tooltip {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(-5px);
         }
 
         /* 登录/注册模态框 */
@@ -196,7 +245,13 @@
     <nav class="main-nav">
         <div>
             <a href="{{ url_for('index') }}">🏠 首页</a>
-            <a href="{{ url_for('show_favorites') }}">❤️ 我的收藏</a>
+            <a href="{{ url_for('show_favorites') }}">
+                ❤️ 我的收藏
+                {% if live_count > 0 %}
+                    <span class="live-dot"></span>
+                    <span class="tooltip">{{ live_count }} 个直播间正在直播</span>
+                {% endif %}
+            </a>
         </div>
         <a href="#" id="login-register">登录/注册</a>
     </nav>
@@ -255,7 +310,7 @@
         window.onload = function() {
             const username = localStorage.getItem('username');
             if (username) {
-                console.log('Found username in localStorage:', username); // 调试
+                console.log('Found username in localStorage:', username);
                 document.getElementById('login-register').textContent = username;
             }
         };
@@ -289,14 +344,14 @@
 
         // 显示成功提示模态框
         function showSuccessModal(message) {
-            console.log('Showing success modal with message:', message); // 调试
+            console.log('Showing success modal with message:', message);
             document.getElementById('success-message').textContent = message;
             document.getElementById('success-modal').classList.add('active');
         }
 
         // 关闭成功提示模态框
         function closeSuccessModal() {
-            console.log('Closing success modal'); // 调试
+            console.log('Closing success modal');
             document.getElementById('success-modal').classList.remove('active');
         }
 
@@ -307,10 +362,8 @@
         function fakeLogin() {
             const username = document.getElementById('signin-username').value;
             if (username) {
-                console.log('Login successful, username:', username); // 调试
-                // 存储用户名到 localStorage
+                console.log('Login successful, username:', username);
                 localStorage.setItem('username', username);
-                // 更新导航条
                 document.getElementById('login-register').textContent = username;
                 showSuccessModal(`登录成功！用户名: ${username}`);
                 closeLoginModal();
@@ -326,11 +379,9 @@
             const repeatPassword = document.getElementById('signup-repeat-password').value;
             if (password === repeatPassword && username) {
                 showSuccessModal(`注册成功！用户名: ${username}`);
-                // 清空注册表单
                 document.getElementById('signup-username').value = '';
                 document.getElementById('signup-password').value = '';
                 document.getElementById('signup-repeat-password').value = '';
-                // 切换到登录选项卡
                 switchTab('signin');
             } else if (!username) {
                 showSuccessModal('请输入用户名！');

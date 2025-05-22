@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}直播弹幕分析{% endblock %}
+{% block content %}
+<div class="container">
+    <h1>📊 直播弹幕分析</h1>
+    <a href="{{ url_for('show_favorites') }}" class="back-btn">返回收藏</a>
+
+    {% if not results %}
+        <div class="no-results">
+            🔔 当前无正在直播的直播间或弹幕数据未爬取，请稍后重试。
+        </div>
+    {% else %}
+        <div class="result-stats">
+            共 {{ results|length }} 个直播间分析结果
+        </div>
+        <div class="analysis-container">
+            {% for result in results %}
+                <div class="analysis-card">
+                    <h2>{{ result.title }}</h2>
+                    <p><strong>房间号：</strong>{{ result.room_id }}</p>
+                    {% if 'error' in result.analysis %}
+                        <p class="error">{{ result.analysis.error }}</p>
+                    {% else %}
+                        <p><strong>弹幕数量：</strong>{{ result.analysis.comment_count }}</p>
+                        <p><strong>主题关键词：</strong>{{ result.analysis.keywords|join('; ') }}</p>
+                        <p><strong>总体摘要：</strong>{{ result.analysis.summary }}</p>
+                    {% endif %}
+                    <a href="https://live.bilibili.com/{{ result.room_id }}" target="_blank" class="watch-btn">📺 观看直播</a>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+
+<style>
+    .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 40px;
+        text-align: center;
+    }
+
+    h1 {
+        font-size: 2.5em;
+        color: #333;
+        margin-bottom: 20px;
+    }
+
+    .back-btn {
+        text-decoration: none;
+        color: #00a1d6;
+        background-color: #fff;
+        font-size: 1.1em;
+        padding: 8px 16px;
+        border: 1px solid #00a1d6;
+        border-radius: 4px;
+        transition: background-color 0.3s, color 0.3s;
+        display: inline-block;
+        margin-bottom: 20px;
+    }
+
+    .back-btn:hover {
+        background-color: #e0f7fa;
+        color: #0083b0;
+    }
+
+    .no-results {
+        font-size: 1.2em;
+        color: #666;
+        margin: 20px 0;
+    }
+
+    .result-stats {
+        font-size: 1.1em;
+        color: #333;
+        margin-bottom: 20px;
+    }
+
+    .analysis-container {
+        display: grid;
+        gap: 20px;
+    }
+
+    .analysis-card {
+        background-color: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: left;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .analysis-card h2 {
+        font-size: 1.6em;
+        color: #333;
+        margin-bottom: 8px;
+    }
+
+    .analysis-card p {
+        font-size: 1em;
+        color: #666;
+        margin: 6px 0;
+        white-space: normal;
+    }
+
+    .analysis-card .error {
+        color: #d32f2f;
+        font-weight: bold;
+    }
+
+    .watch-btn {
+        text-decoration: none;
+        color: #fff;
+        background: linear-gradient(135deg, #00a1d6 0%, #4dc3ff 100%);
+        font-size: 1em;
+        font-weight: 600;
+        padding: 6px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s, box-shadow 0.2s, background 0.3s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 10px;
+    }
+
+    .watch-btn:hover {
+        background: linear-gradient(135deg, #4dc3ff 0%, #00a1d6 100%);
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(0, 161, 214, 0.3);
+    }
+
+    .watch-btn:active {
+        transform: scale(0.95);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    @media (max-width: 600px) {
+        .analysis-card {
+            padding: 10px;
+        }
+        .analysis-card h2 {
+            font-size: 1.4em;
+        }
+        .analysis-card p {
+            font-size: 0.9em;
+        }
+        .watch-btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}

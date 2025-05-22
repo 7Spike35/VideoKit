@@ -1,10 +1,19 @@
-from datetime import timedelta
 from flask import Flask, render_template, request, session, jsonify
 import pandas as pd
 from search import weighted_search, search_bilibili
 from webcrawl_video import get_comments_csv
 from analysis import f
 import os
+import requests
+from datetime import timedelta
+import time
+import io
+import sys
+import re
+import csv
+
+# 解决编码问题
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
@@ -14,6 +23,49 @@ app.permanent_session_lifetime = timedelta(days=7)
 TEMP_CSV_PATH = "temp_search_results.csv"
 TEMP_LIVE_CSV_PATH = "temp_live_results.csv"
 COMMENTS_CSV_PATH = "comments.csv"
+DANMU_DIR = "static/danmu"
+if not os.path.exists(DANMU_DIR):
+    os.makedirs(DANMU_DIR)
+
+# B 站直播 API
+BILIBILI_LIVE_API = "https://api.live.bilibili.com/room/v1/Room/get_info"
+
+
+class Danmu:
+    def __init__(self, room_id, output_path):
+        self.url = 'https://api.live.bilibili.com/xlive/web-room/v1/dM/gethistory'
+        self.headers = {
+            'Host': 'api.live.bilibili.com',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:78.0) Gecko/20100101 Firefox/78.0',
+        }
+        self.data = {
+            'roomid': room_id,
+            'csrf_token': '',
+            'csrf': '',
+            'visit_id': '',
+        }
+        self.danmu_seen = set()
+        self.output_path = output_path
+
+    def get_danmu(self):
+        try:
+            response = requests.post(url=self.url, headers=self.headers, data=self.data)
+            response.raise_for_status()
+            html = response.json()
+            if 'data' in html and 'room' in html['data']:
+                danmu_list = html['data']['room']
+                with open(self.output_path, mode="a", encoding="utf-8", newline="") as file:
+                    writer = csv.writer(file)
+                    for content in danmu_list:
+                        nickname = content.get('nickname', '未知用户')
+                        text = content.get('text', '')
+                        timeline = content.get('timeline', '')
+                        msg_tuple = (timeline, nickname, text)
+                        if msg_tuple not in self.danmu_seen:
+                            self.danmu_seen.add(msg_tuple)
+                            writer.writerow([timeline, nickname, text])
+        except Exception as e:
+            print(f"获取直播间 {self.data['roomid']} 弹幕时出错: {e}")
 
 
 @app.before_request
@@ -24,6 +76,158 @@ def init_favorites():
     if 'live_favorites' not in session:
         session.permanent = True
         session['live_favorites'] = []
+    if 'live_status_cache' not in session:
+        session['live_status_cache'] = {'timestamp': 0, 'live_count': 0, 'status': {}}
+
+
+@app.context_processor
+def inject_live_count():
+    cache = session.get('live_status_cache', {'timestamp': 0, 'live_count': 0, 'status': {}})
+    current_time = time.time()
+    cache_timeout = 60
+    live_count = cache['live_count']
+    live_status = cache['status']
+
+    if current_time - cache['timestamp'] > cache_timeout or not live_status:
+        live_favorites = session.get('live_favorites', [])
+        live_count = 0
+        if live_favorites:
+            room_ids = [item['id'] for item in live_favorites]
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            for room_id in room_ids:
+                try:
+                    response = requests.get(
+                        BILIBILI_LIVE_API,
+                        params={'room_id': room_id},
+                        headers=headers,
+                        timeout=5
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+                    if result.get('code') == 0:
+                        is_live = result['data']['live_status'] == 1
+                        live_status[room_id] = {'is_live': is_live}
+                        if is_live:
+                            live_count += 1
+                    else:
+                        live_status[room_id] = {'is_live': False}
+                except Exception:
+                    live_status[room_id] = {'is_live': False}
+
+        session['live_status_cache'] = {
+            'timestamp': current_time,
+            'live_count': live_count,
+            'status': live_status
+        }
+        session.modified = True
+
+    return {'live_count': live_count}
+
+
+@app.route('/trigger_crawl', methods=['POST'])
+def trigger_crawl():
+    try:
+        live_favorites = session.get('live_favorites', [])
+        live_status = session.get('live_status_cache', {'status': {}})['status']
+        last_crawl = session.get('last_crawl_time', 0)
+        current_time = time.time()
+
+        if current_time - last_crawl < 60:
+            return jsonify({"status": "success", "message": "爬取冷却中，请稍后"})
+
+        crawled = 0
+        for item in live_favorites:
+            room_id = item['id']
+            if live_status.get(room_id, {'is_live': False})['is_live']:
+                output_path = os.path.join(DANMU_DIR, f"live_comments_{room_id}.csv")
+                with open(output_path, mode="w", encoding="utf-8", newline="") as file:
+                    writer = csv.writer(file)
+                    writer.writerow(["时间", "用户", "弹幕内容"])
+                danmu = Danmu(room_id, output_path)
+                for _ in range(10):
+                    danmu.get_danmu()
+                    time.sleep(0.5)
+                crawled += 1
+
+        session['last_crawl_time'] = current_time
+        session.modified = True
+        return jsonify({"status": "success", "message": f"爬取 {crawled} 个直播间"})
+    except Exception as e:
+        return jsonify({"error": f"爬取失败：{str(e)}"})
+
+
+@app.route('/live_analysis')
+def live_analysis():
+    live_favorites = session.get('live_favorites', [])
+    live_status = session.get('live_status_cache', {'status': {}})['status']
+    analysis_results = []
+
+    for item in live_favorites:
+        room_id = item['id']
+        if live_status.get(room_id, {'is_live': False})['is_live']:
+            csv_path = os.path.join(DANMU_DIR, f"live_comments_{room_id}.csv")
+            if os.path.exists(csv_path):
+                try:
+                    # 调整 CSV 列名以匹配 f 函数
+                    df = pd.read_csv(csv_path)
+                    if not df.empty:
+                        df.columns = ['time', 'user', 'comment']
+                        df.to_csv(csv_path, index=False)
+                        result = f(csv_path)
+                        analysis_results.append({
+                            'room_id': room_id,
+                            'title': item['title'],
+                            'analysis': result
+                        })
+                except Exception as e:
+                    analysis_results.append({
+                        'room_id': room_id,
+                        'title': item['title'],
+                        'analysis': {'error': f"分析失败：{str(e)}"}
+                    })
+            else:
+                analysis_results.append({
+                    'room_id': room_id,
+                    'title': item['title'],
+                    'analysis': {'error': '弹幕数据未爬取'}
+                })
+
+    return render_template('live_analysis.html', results=analysis_results)
+
+
+@app.route('/check_live_status', methods=['POST'])
+def check_live_status():
+    try:
+        data = request.json
+        room_ids = data.get('room_ids', [])
+        if not room_ids:
+            return jsonify({"error": "未提供房间 ID"})
+
+        live_status = {}
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        for room_id in room_ids:
+            try:
+                response = requests.get(
+                    BILIBILI_LIVE_API,
+                    params={'room_id': room_id},
+                    headers=headers,
+                    timeout=5
+                )
+                response.raise_for_status()
+                result = response.json()
+                if result.get('code') == 0:
+                    status = result['data']['live_status']
+                    live_status[room_id] = {'is_live': status == 1}
+                else:
+                    live_status[room_id] = {'is_live': False, 'error': result.get('msg', 'API 错误')}
+            except Exception as e:
+                live_status[room_id] = {'is_live': False, 'error': str(e)}
+
+        return jsonify({"status": "success", "live_status": live_status})
+    except Exception as e:
+        return jsonify({"error": f"检查直播状态失败：{str(e)}"})
 
 
 @app.route('/favorites')
@@ -34,6 +238,29 @@ def show_favorites():
     live_total = len(live_favorites)
     paginated_video_favorites = video_favorites[:10]
     paginated_live_favorites = live_favorites[:10]
+
+    live_status = session.get('live_status_cache', {'status': {}})['status']
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    for item in paginated_live_favorites:
+        room_id = item['id']
+        if room_id not in live_status:
+            try:
+                response = requests.get(
+                    BILIBILI_LIVE_API,
+                    params={'room_id': room_id},
+                    headers=headers,
+                    timeout=5
+                )
+                response.raise_for_status()
+                result = response.json()
+                if result.get('code') == 0:
+                    live_status[room_id] = {'is_live': result['data']['live_status'] == 1}
+                else:
+                    live_status[room_id] = {'is_live': False}
+            except Exception:
+                live_status[room_id] = {'is_live': False}
+        item['is_live'] = live_status.get(room_id, {'is_live': False})['is_live']
+
     return render_template(
         'favorite.html',
         video_favorites=paginated_video_favorites,
@@ -49,7 +276,7 @@ def favorites_page():
         data = request.json
         page = int(data.get('page', 1))
         items_per_page = int(data.get('items_per_page', 10))
-        fav_type = data.get('type', 'video')  # 'video' or 'live'
+        fav_type = data.get('type', 'video')
 
         if fav_type == 'video':
             favorites = session.get('video_favorites', [])
@@ -60,6 +287,29 @@ def favorites_page():
         start = (page - 1) * items_per_page
         end = start + items_per_page
         paginated_favorites = favorites[start:end]
+
+        if fav_type == 'live' and paginated_favorites:
+            live_status = session.get('live_status_cache', {'status': {}})['status']
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            for item in paginated_favorites:
+                room_id = item['id']
+                if room_id not in live_status:
+                    try:
+                        response = requests.get(
+                            BILIBILI_LIVE_API,
+                            params={'room_id': room_id},
+                            headers=headers,
+                            timeout=5
+                        )
+                        response.raise_for_status()
+                        result = response.json()
+                        if result.get('code') == 0:
+                            live_status[room_id] = {'is_live': result['data']['live_status'] == 1}
+                        else:
+                            live_status[room_id] = {'is_live': False}
+                    except Exception:
+                        live_status[room_id] = {'is_live': False}
+                item['is_live'] = live_status.get(room_id, {'is_live': False})['is_live']
 
         return jsonify({
             "favorites": paginated_favorites,
@@ -86,12 +336,15 @@ def add_favorite():
             favorites.append(favorite_info)
             session['video_favorites'] = favorites
             session.modified = True
-    else:  # live
+    else:
         favorites = session.get('live_favorites', [])
         if not any(item['id'] == id for item in favorites):
             favorites.append(favorite_info)
             session['live_favorites'] = favorites
             session.modified = True
+
+    session['live_status_cache'] = {'timestamp': 0, 'live_count': 0, 'status': {}}
+    session.modified = True
 
     return {"status": "success"}
 
@@ -108,11 +361,13 @@ def remove_favorite():
         if fav_type == 'video':
             favorites = session.get('video_favorites', [])
             session['video_favorites'] = [item for item in favorites if item['id'] != id]
-        else:  # live
+        else:
             favorites = session.get('live_favorites', [])
             session['live_favorites'] = [item for item in favorites if item['id'] != id]
 
+        session['live_status_cache'] = {'timestamp': 0, 'live_count': 0, 'status': {}}
         session.modified = True
+
         return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"error": f"取消收藏失败：{str(e)}"})
@@ -137,16 +392,13 @@ def search():
         if not keyword_list:
             return render_template('result.html', error="无关键词，请输入搜索内容")
 
-        # 删除旧的临时文件
         if os.path.exists(TEMP_CSV_PATH):
             os.remove(TEMP_CSV_PATH)
         if os.path.exists(TEMP_LIVE_CSV_PATH):
             os.remove(TEMP_LIVE_CSV_PATH)
 
-        # 爬取视频和直播数据
         search_bilibili(keyword_list, max_page=5, video_out_file=TEMP_CSV_PATH, live_out_file=TEMP_LIVE_CSV_PATH)
 
-        # 处理视频结果
         if not os.path.exists(TEMP_CSV_PATH):
             video_error = "视频爬虫未生成数据，请稍后再试"
             video_results = []
@@ -163,7 +415,6 @@ def search():
                 video_results = results.to_dict(orient='records')
                 video_total = len(video_results)
 
-        # 处理直播结果
         if not os.path.exists(TEMP_LIVE_CSV_PATH):
             live_error = "直播爬虫未生成数据，请稍后再试"
             live_results = []
@@ -179,7 +430,6 @@ def search():
                 live_results = live_df.to_dict(orient='records')
                 live_total = len(live_results)
 
-        # 如果两者都出错，返回错误页面
         if video_error and live_error:
             return render_template('result.html', error=f"{video_error}；{live_error}")
 
@@ -206,7 +456,7 @@ def search_page():
         keywords = data.get('keywords', '')
         page = int(data.get('page', 1))
         items_per_page = int(data.get('items_per_page', 10))
-        result_type = data.get('type', 'video')  # 'video' or 'live'
+        result_type = data.get('type', 'video')
 
         keyword_list = [k.strip() for k in keywords.split('#') if k.strip()]
 
@@ -222,7 +472,7 @@ def search_page():
             results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
             result_data = results.to_dict(orient='records')
             favorites = session.get('video_favorites', [])
-        else:  # live
+        else:
             if not os.path.exists(TEMP_LIVE_CSV_PATH):
                 return jsonify({"error": "直播数据文件不存在，请重新搜索"})
             df = pd.read_csv(TEMP_LIVE_CSV_PATH)
@@ -253,7 +503,6 @@ def analyze(bvid):
         if not bvid or not isinstance(bvid, str):
             return render_template('analysis.html', error="无效的BVID")
 
-        # 获取弹幕数据
         csv_result = get_comments_csv(bvid)
         if csv_result is None:
             return render_template('analysis.html', error="无法获取弹幕数据")
@@ -264,7 +513,6 @@ def analyze(bvid):
         else:
             return render_template('analysis.html', error="弹幕数据格式错误")
 
-        # 调用分析函数
         analysis_result = f(COMMENTS_CSV_PATH)
         if 'error' in analysis_result:
             return render_template('analysis.html', error=analysis_result['error'])

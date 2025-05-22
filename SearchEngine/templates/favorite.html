@@ -45,7 +45,12 @@
     {% endif %}
 
     <!-- 直播收藏 -->
-    <div class="section-title">直播收藏</div>
+    <div class="section-title">
+        直播收藏
+        {% if live_count > 0 %}
+            <a href="{{ url_for('live_analysis') }}" class="analysis-btn" onclick="return triggerCrawl(this)">📊 详细报告</a>
+        {% endif %}
+    </div>
     {% if not live_favorites %}
         <div class="no-favorites">
             👜 直播收藏夹是空的，快去收藏喜欢的直播吧！
@@ -59,6 +64,7 @@
                 <tr>
                     <th>直播标题</th>
                     <th>人气</th>
+                    <th>直播状态</th>
                     <th>直播链接</th>
                     <th>操作</th>
                 </tr>
@@ -68,6 +74,9 @@
                 <tr>
                     <td class="video-title">{{ item.title }}</td>
                     <td>{{ "%.0f"|format(item.heat) }}</td>
+                    <td class="live-status {{ 'live' if item.is_live else '' }}">
+                        {{ '正在直播' if item.is_live else '未开播' }}
+                    </td>
                     <td>
                         <a href="https://live.bilibili.com/{{ item.id }}" target="_blank">
                             观看直播
@@ -116,6 +125,48 @@
         color: #0083b0;
     }
 
+    .analysis-btn {
+        text-decoration: none;
+        color: #fff;
+        background: linear-gradient(135deg, #00a1d6 0%, #4dc3ff 100%);
+        font-size: 1.1em;
+        font-weight: 600;
+        padding: 8px 16px;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        margin-left: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s, box-shadow 0.2s, background 0.3s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .analysis-btn:hover {
+        background: linear-gradient(135deg, #4dc3ff 0%, #00a1d6 100%);
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(0, 161, 214, 0.3);
+    }
+
+    .analysis-btn:active {
+        transform: scale(0.95);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .analysis-btn.disabled {
+        background: #ccc;
+        color: #666;
+        cursor: not-allowed;
+        box-shadow: none;
+        transform: none;
+    }
+
+    .analysis-btn.disabled:hover {
+        background: #ccc;
+        box-shadow: none;
+        transform: none;
+    }
+
     .no-favorites {
         font-size: 1.2em;
         color: #666;
@@ -150,6 +201,14 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    .live-status {
+        color: #00a1d6;
+    }
+
+    .live-status:not(.live) {
+        color: #666;
     }
 
     .favorite-table a {
@@ -206,15 +265,53 @@
         font-size: 1.8em;
         color: #333;
         margin: 30px 0 15px;
+        display: flex;
+        align-items: center;
     }
 </style>
 
 <script>
-    const ITEMS_PER_PAGE = 10; // 修改为每页10条
+    const ITEMS_PER_PAGE = 10;
     const videoTotalItems = {{ video_total }};
     const liveTotalItems = {{ live_total }};
     const videoTotalPages = Math.ceil(videoTotalItems / ITEMS_PER_PAGE);
     const liveTotalPages = Math.ceil(liveTotalItems / ITEMS_PER_PAGE);
+
+    function triggerCrawl(element) {
+        const btn = element;
+        if (btn.classList.contains('disabled')) {
+            alert('爬取冷却中，请稍后重试');
+            return false;
+        }
+
+        btn.classList.add('disabled');
+        fetch('/trigger_crawl', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                console.log(data.message);
+                setTimeout(() => btn.classList.remove('disabled'), 60000); // 60秒冷却
+                return true; // 允许跳转
+            } else {
+                alert('触发爬取失败：' + (data.error || '未知错误'));
+                btn.classList.remove('disabled');
+                return false; // 阻止跳转
+            }
+        })
+        .catch(error => {
+            console.error('Crawl error:', error);
+            alert('触发爬取失败，请检查网络或稍后重试');
+            btn.classList.remove('disabled');
+            return false; // 阻止跳转
+        });
+        return true; // 默认允许跳转
+    }
 
     function renderPagination(containerId, currentPage, totalPages, type) {
         const pagination = document.getElementById(containerId);
@@ -289,7 +386,7 @@
             const tbody = document.getElementById(`${type}-favorite-tbody`);
             tbody.innerHTML = '';
             if (data.favorites.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="${type === 'video' ? 4 : 4}">无数据</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="${type === 'video' ? 4 : 5}">无数据</td></tr>`;
             } else {
                 data.favorites.forEach(item => {
                     const tr = document.createElement('tr');
@@ -304,6 +401,7 @@
                         tr.innerHTML = `
                             <td class="video-title">${item.title}</td>
                             <td>${item.heat.toFixed(0)}</td>
+                            <td class="live-status ${item.is_live ? 'live' : ''}">${item.is_live ? '正在直播' : '未开播'}</td>
                             <td><a href="https://live.bilibili.com/${item.id}" target="_blank">观看直播</a></td>
                             <td><button class="remove-btn" data-id="${item.id}" data-type="live">取消收藏</button></td>
                         `;
@@ -364,5 +462,4 @@
         bindRemoveButtons();
     }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'93c73fe73dceb013',t:'MTc0NjY4OTQwNC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
 {% endblock %}
