@@ -13,7 +13,7 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        .main-nav a {
+        .main-nav a, .main-nav span {
             color: white;
             text-decoration: none;
             font-size: 1.2em;
@@ -22,7 +22,6 @@
             position: relative;
             display: inline-flex;
             align-items: center;
-            gap: 6px;
         }
 
         .main-nav a:hover {
@@ -30,52 +29,6 @@
             border-radius: 4px;
         }
 
-        .live-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            background-color: #ff4d4f;
-            border-radius: 50%;
-        }
-
-        .tooltip {
-            visibility: hidden;
-            opacity: 0;
-            background-color: #005c7a;
-            color: #fff;
-            text-align: center;
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid #e0e0e0;
-            position: absolute;
-            top: calc(100% + 8px);
-            left: 50%;
-            transform: translateX(-50%) translateY(0);
-            white-space: nowrap;
-            font-size: 0.95em;
-            font-weight: 500;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-            transition: opacity 0.2s, transform 0.2s;
-            z-index: 100;
-        }
-
-        .tooltip::before {
-            content: '';
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 6px solid transparent;
-            border-bottom-color: #005c7a;
-        }
-
-        .main-nav a:hover .tooltip {
-            visibility: visible;
-            opacity: 1;
-            transform: translateX(-50%) translateY(-5px);
-        }
-
-        /* 登录/注册模态框 */
         .modal {
             display: none;
             position: fixed;
@@ -174,6 +127,13 @@
             box-shadow: 0 0 4px rgba(0, 161, 214, 0.3);
         }
 
+        .error {
+            color: #d32f2f;
+            font-size: 0.9em;
+            margin-top: 5px;
+            display: none;
+        }
+
         .modal-button {
             width: 100%;
             padding: 12px;
@@ -191,7 +151,6 @@
             transform: scale(1.02);
         }
 
-        /* 成功提示模态框 */
         .success-modal {
             display: none;
             position: fixed;
@@ -245,59 +204,64 @@
     <nav class="main-nav">
         <div>
             <a href="{{ url_for('index') }}">🏠 首页</a>
-            <a href="{{ url_for('show_favorites') }}">
-                ❤️ 我的收藏
-                {% if live_count > 0 %}
-                    <span class="live-dot"></span>
-                    <span class="tooltip">{{ live_count }} 个直播间正在直播</span>
-                {% endif %}
-            </a>
+            <a href="{{ url_for('show_favorites') }}">❤️ 我的收藏</a>
         </div>
-        <a href="#" id="login-register">登录/注册</a>
+        <div>
+            {% if current_user %}
+                <span>欢迎，{{ current_user }}</span>
+                <a href="{{ url_for('logout') }}">登出</a>
+            {% else %}
+                <a href="#" onclick="openModal('login')">登录/注册</a>
+            {% endif %}
+        </div>
     </nav>
 
-    <!-- 登录/注册模态框 -->
     <div class="modal" id="login-modal">
         <div class="modal-content">
-            <span class="close-btn" onclick="closeLoginModal()">×</span>
+            <span class="close-btn" onclick="closeModal()">×</span>
             <div class="tabs">
                 <div class="tab active" data-tab="signin">登录</div>
                 <div class="tab" data-tab="signup">注册</div>
             </div>
             <div class="tab-content active" id="signin">
-                <div class="form-group">
-                    <label>用户名</label>
-                    <input type="text" id="signin-username" placeholder="请输入用户名">
-                </div>
-                <div class="form-group">
-                    <label>密码</label>
-                    <input type="password" id="signin-password" placeholder="请输入密码">
-                </div>
-                <button class="modal-button" onclick="fakeLogin()">登录</button>
+                <form id="signin-form">
+                    <div class="form-group">
+                        <label>用户名</label>
+                        <input type="text" name="username" placeholder="请输入用户名">
+                        <div class="error" id="signin-error"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>密码</label>
+                        <input type="password" name="password" placeholder="请输入密码">
+                    </div>
+                    <button type="submit" class="modal-button">登录</button>
+                </form>
             </div>
             <div class="tab-content" id="signup">
-                <div class="form-group">
-                    <label>用户名</label>
-                    <input type="text" id="signup-username" placeholder="请输入用户名">
-                </div>
-                <div class="form-group">
-                    <label>密码</label>
-                    <input type="password" id="signup-password" placeholder="请输入密码">
-                </div>
-                <div class="form-group">
-                    <label>重复密码</label>
-                    <input type="password" id="signup-repeat-password" placeholder="请再次输入密码">
-                </div>
-                <button class="modal-button" onclick="fakeRegister()">注册</button>
+                <form id="signup-form">
+                    <div class="form-group">
+                        <label>用户名</label>
+                        <input type="text" name="username" placeholder="请输入用户名">
+                        <div class="error" id="signup-error"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>密码</label>
+                        <input type="password" name="password" placeholder="请输入密码">
+                    </div>
+                    <div class="form-group">
+                        <label>重复密码</label>
+                        <input type="password" name="repeat_password" placeholder="请再次输入密码">
+                    </div>
+                    <button type="submit" class="modal-button">注册</button>
+                </form>
             </div>
         </div>
     </div>
 
-    <!-- 成功提示模态框 -->
     <div class="success-modal" id="success-modal">
         <div class="success-modal-content">
             <p id="success-message"></p>
-            <button class="success-modal-button" id="success-modal-close">确定</button>
+            <button class="success-modal-button" onclick="closeSuccessModal()">确定</button>
         </div>
     </div>
 
@@ -306,89 +270,89 @@
     </div>
 
     <script>
-        // 页面加载时检查 localStorage 中的用户名
-        window.onload = function() {
-            const username = localStorage.getItem('username');
-            if (username) {
-                console.log('Found username in localStorage:', username);
-                document.getElementById('login-register').textContent = username;
-            }
-        };
-
-        // 打开登录/注册模态框
-        document.getElementById('login-register').addEventListener('click', (e) => {
-            e.preventDefault();
-            document.getElementById('login-modal').style.display = 'flex';
-        });
-
-        // 关闭登录/注册模态框
-        function closeLoginModal() {
-            document.getElementById('login-modal').style.display = 'none';
+        function openModal(tab) {
+            document.getElementById('login-modal').classList.add('active');
+            switchTab(tab);
         }
 
-        // 切换选项卡
-        const tabs = document.querySelectorAll('.tab');
-        const contents = document.querySelectorAll('.tab-content');
+        function closeModal() {
+            document.getElementById('login-modal').classList.remove('active');
+            document.getElementById('signin-error').style.display = 'none';
+            document.getElementById('signup-error').style.display = 'none';
+            document.getElementById('signin-form').reset();
+            document.getElementById('signup-form').reset();
+        }
+
         function switchTab(tabName) {
-            tabs.forEach(t => t.classList.remove('active'));
-            contents.forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
             document.getElementById(tabName).classList.add('active');
         }
 
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                switchTab(tab.dataset.tab);
-            });
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
         });
 
-        // 显示成功提示模态框
         function showSuccessModal(message) {
-            console.log('Showing success modal with message:', message);
             document.getElementById('success-message').textContent = message;
             document.getElementById('success-modal').classList.add('active');
         }
 
-        // 关闭成功提示模态框
         function closeSuccessModal() {
-            console.log('Closing success modal');
             document.getElementById('success-modal').classList.remove('active');
+            window.location.reload();
         }
 
-        // 为成功模态框的关闭按钮绑定事件
-        document.getElementById('success-modal-close').addEventListener('click', closeSuccessModal);
+        document.getElementById('signin-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const errorDiv = document.getElementById('signin-error');
+            errorDiv.style.display = 'none';
 
-        // 假登录
-        function fakeLogin() {
-            const username = document.getElementById('signin-username').value;
-            if (username) {
-                console.log('Login successful, username:', username);
-                localStorage.setItem('username', username);
-                document.getElementById('login-register').textContent = username;
-                showSuccessModal(`登录成功！用户名: ${username}`);
-                closeLoginModal();
-            } else {
-                showSuccessModal('请输入用户名！');
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    closeModal();
+                    showSuccessModal('登录成功！');
+                } else {
+                    errorDiv.textContent = data.error;
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                errorDiv.textContent = '登录失败，请稍后重试';
+                errorDiv.style.display = 'block';
             }
-        }
+        });
 
-        // 假注册
-        function fakeRegister() {
-            const username = document.getElementById('signup-username').value;
-            const password = document.getElementById('signup-password').value;
-            const repeatPassword = document.getElementById('signup-repeat-password').value;
-            if (password === repeatPassword && username) {
-                showSuccessModal(`注册成功！用户名: ${username}`);
-                document.getElementById('signup-username').value = '';
-                document.getElementById('signup-password').value = '';
-                document.getElementById('signup-repeat-password').value = '';
-                switchTab('signin');
-            } else if (!username) {
-                showSuccessModal('请输入用户名！');
-            } else {
-                showSuccessModal('密码不匹配！');
+        document.getElementById('signup-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const errorDiv = document.getElementById('signup-error');
+            errorDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.status === 'success') {
+                    closeModal();
+                    showSuccessModal('注册成功！请登录');
+                } else {
+                    errorDiv.textContent = data.error;
+                    errorDiv.style.display = 'block';
+                }
+            } catch (err) {
+                errorDiv.textContent = '注册失败，请稍后重试';
+                errorDiv.style.display = 'block';
             }
-        }
+        });
     </script>
 </body>
 </html>

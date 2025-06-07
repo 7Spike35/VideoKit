@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, session, jsonify
+from flask import Flask, render_template, request, session, jsonify, flash, redirect, url_for
 import pandas as pd
 from search import weighted_search, search_bilibili
 from webcrawl_video import get_comments_csv
@@ -11,6 +11,10 @@ import io
 import sys
 import re
 import csv
+import json
+from sqlmodel import SQLModel, create_engine, Session, select
+from models import User
+import bcrypt
 
 # 解决编码问题
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -18,6 +22,32 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
 app.permanent_session_lifetime = timedelta(days=7)
+
+# 数据库初始化
+DATABASE_URL = "sqlite:///db.sqlite"
+engine = create_engine(DATABASE_URL)
+SQLModel.metadata.create_all(engine)
+
+# 全局收藏（共享）
+FAVORITES_FILE = "favorites.json"
+global_favorites = {'video_favorites': [], 'live_favorites': []}
+
+# 加载收藏
+def load_favorites():
+    global global_favorites
+    if os.path.exists(FAVORITES_FILE):
+        with open(FAVORITES_FILE, 'r', encoding='utf-8') as f:
+            global_favorites = json.load(f)
+    else:
+        global_favorites = {'video_favorites': [], 'live_favorites': []}
+
+# 保存收藏
+def save_favorites():
+    with open(FAVORITES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(global_favorites, f, ensure_ascii=False, indent=2)
+
+# 初始化收藏
+load_favorites()
 
 # 临时 CSV 文件路径
 TEMP_CSV_PATH = "temp_search_results.csv"
@@ -29,7 +59,6 @@ if not os.path.exists(DANMU_DIR):
 
 # B 站直播 API
 BILIBILI_LIVE_API = "https://api.live.bilibili.com/room/v1/Room/get_info"
-
 
 class Danmu:
     def __init__(self, room_id, output_path):
@@ -67,18 +96,16 @@ class Danmu:
         except Exception as e:
             print(f"获取直播间 {self.data['roomid']} 弹幕时出错: {e}")
 
-
 @app.before_request
-def init_favorites():
-    if 'video_favorites' not in session:
-        session.permanent = True
-        session['video_favorites'] = []
-    if 'live_favorites' not in session:
-        session.permanent = True
-        session['live_favorites'] = []
+def init_session():
     if 'live_status_cache' not in session:
+        session.permanent = True
         session['live_status_cache'] = {'timestamp': 0, 'live_count': 0, 'status': {}}
 
+@app.context_processor
+def inject_user():
+    user = session.get('username', None)
+    return {'current_user': user}
 
 @app.context_processor
 def inject_live_count():
@@ -89,7 +116,7 @@ def inject_live_count():
     live_status = cache['status']
 
     if current_time - cache['timestamp'] > cache_timeout or not live_status:
-        live_favorites = session.get('live_favorites', [])
+        live_favorites = global_favorites.get('live_favorites', [])
         live_count = 0
         if live_favorites:
             room_ids = [item['id'] for item in live_favorites]
@@ -123,11 +150,62 @@ def inject_live_count():
 
     return {'live_count': live_count}
 
+@app.route('/register', methods=['POST'])
+def register():
+    try:
+        username = request.form.get('username')
+        password = request.form.get('password')
+        repeat_password = request.form.get('repeat_password')
+
+        if not username or not password:
+            return jsonify({"status": "error", "error": "用户名和密码不能为空"})
+        if password != repeat_password:
+            return jsonify({"status": "error", "error": "两次密码不一致"})
+
+        with Session(engine) as db:
+            if db.exec(select(User).where(User.username == username)).first():
+                return jsonify({"status": "error", "error": "用户名已存在"})
+
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            user = User(username=username, password=hashed_password)
+            db.add(user)
+            db.commit()
+
+        return jsonify({"status": "success", "message": "注册成功，请登录"})
+    except Exception as e:
+        return jsonify({"status": "error", "error": f"注册失败：{str(e)}"})
+
+@app.route('/login', methods=['POST'])
+def login():
+    try:
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        if not username or not password:
+            return jsonify({"status": "error", "error": "用户名和密码不能为空"})
+
+        with Session(engine) as db:
+            user = db.exec(select(User).where(User.username == username)).first()
+            if not user:
+                return jsonify({"status": "error", "error": "用户不存在"})
+            if not bcrypt.checkpw(password.encode('utf-8'), user.password.encode('utf-8')):
+                return jsonify({"status": "error", "error": "密码错误"})
+
+        session['username'] = username
+        session.modified = True
+        return jsonify({"status": "success", "message": "登录成功"})
+    except Exception as e:
+        return jsonify({"status": "error", "error": f"登录失败：{str(e)}"})
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('index'))
 
 @app.route('/trigger_crawl', methods=['POST'])
 def trigger_crawl():
     try:
-        live_favorites = session.get('live_favorites', [])
+        live_favorites = global_favorites.get('live_favorites', [])
         live_status = session.get('live_status_cache', {'status': {}})['status']
         last_crawl = session.get('last_crawl_time', 0)
         current_time = time.time()
@@ -155,10 +233,9 @@ def trigger_crawl():
     except Exception as e:
         return jsonify({"error": f"爬取失败：{str(e)}"})
 
-
 @app.route('/live_analysis')
 def live_analysis():
-    live_favorites = session.get('live_favorites', [])
+    live_favorites = global_favorites.get('live_favorites', [])
     live_status = session.get('live_status_cache', {'status': {}})['status']
     analysis_results = []
 
@@ -168,7 +245,6 @@ def live_analysis():
             csv_path = os.path.join(DANMU_DIR, f"live_comments_{room_id}.csv")
             if os.path.exists(csv_path):
                 try:
-                    # 调整 CSV 列名以匹配 f 函数
                     df = pd.read_csv(csv_path)
                     if not df.empty:
                         df.columns = ['time', 'user', 'comment']
@@ -193,7 +269,6 @@ def live_analysis():
                 })
 
     return render_template('live_analysis.html', results=analysis_results)
-
 
 @app.route('/check_live_status', methods=['POST'])
 def check_live_status():
@@ -229,11 +304,10 @@ def check_live_status():
     except Exception as e:
         return jsonify({"error": f"检查直播状态失败：{str(e)}"})
 
-
 @app.route('/favorites')
 def show_favorites():
-    video_favorites = session.get('video_favorites', [])
-    live_favorites = session.get('live_favorites', [])
+    video_favorites = global_favorites.get('video_favorites', [])
+    live_favorites = global_favorites.get('live_favorites', [])
     video_total = len(video_favorites)
     live_total = len(live_favorites)
     paginated_video_favorites = video_favorites[:10]
@@ -269,7 +343,6 @@ def show_favorites():
         live_total=live_total
     )
 
-
 @app.route('/favorites_page', methods=['POST'])
 def favorites_page():
     try:
@@ -279,9 +352,9 @@ def favorites_page():
         fav_type = data.get('type', 'video')
 
         if fav_type == 'video':
-            favorites = session.get('video_favorites', [])
+            favorites = global_favorites.get('video_favorites', [])
         else:
-            favorites = session.get('live_favorites', [])
+            favorites = global_favorites.get('live_favorites', [])
         total = len(favorites)
 
         start = (page - 1) * items_per_page
@@ -318,7 +391,6 @@ def favorites_page():
     except Exception as e:
         return jsonify({"error": f"分页处理失败：{str(e)}"})
 
-
 @app.route('/add_favorite', methods=['POST'])
 def add_favorite():
     data = request.json
@@ -331,23 +403,21 @@ def add_favorite():
     }
 
     if fav_type == 'video':
-        favorites = session.get('video_favorites', [])
+        favorites = global_favorites.get('video_favorites', [])
         if not any(item['id'] == id for item in favorites):
             favorites.append(favorite_info)
-            session['video_favorites'] = favorites
-            session.modified = True
+            global_favorites['video_favorites'] = favorites
     else:
-        favorites = session.get('live_favorites', [])
+        favorites = global_favorites.get('live_favorites', [])
         if not any(item['id'] == id for item in favorites):
             favorites.append(favorite_info)
-            session['live_favorites'] = favorites
-            session.modified = True
+            global_favorites['live_favorites'] = favorites
 
+    save_favorites()
     session['live_status_cache'] = {'timestamp': 0, 'live_count': 0, 'status': {}}
     session.modified = True
 
     return {"status": "success"}
-
 
 @app.route('/remove_favorite', methods=['POST'])
 def remove_favorite():
@@ -359,12 +429,13 @@ def remove_favorite():
             return jsonify({"error": "缺少 ID 参数"})
 
         if fav_type == 'video':
-            favorites = session.get('video_favorites', [])
-            session['video_favorites'] = [item for item in favorites if item['id'] != id]
+            favorites = global_favorites.get('video_favorites', [])
+            global_favorites['video_favorites'] = [item for item in favorites if item['id'] != id]
         else:
-            favorites = session.get('live_favorites', [])
-            session['live_favorites'] = [item for item in favorites if item['id'] != id]
+            favorites = global_favorites.get('live_favorites', [])
+            global_favorites['live_favorites'] = [item for item in favorites if item['id'] != id]
 
+        save_favorites()
         session['live_status_cache'] = {'timestamp': 0, 'live_count': 0, 'status': {}}
         session.modified = True
 
@@ -372,11 +443,9 @@ def remove_favorite():
     except Exception as e:
         return jsonify({"error": f"取消收藏失败：{str(e)}"})
 
-
 @app.route('/')
 def index():
     return render_template('index.html')
-
 
 @app.route('/search', methods=['GET', 'POST'])
 def search():
@@ -433,21 +502,20 @@ def search():
         if video_error and live_error:
             return render_template('result.html', error=f"{video_error}；{live_error}")
 
-        favorites_bvid = [item['id'] for item in session.get('video_favorites', [])]
-        favorites_room_id = [item['id'] for item in session.get('live_favorites', [])]
+        favorites_bvid = [item['id'] for item in global_favorites.get('video_favorites', [])]
+        favorites_room_id = [item['id'] for item in global_favorites.get('live_favorites', [])]
         return render_template(
             'result.html',
             keywords=keywords,
             video_results=video_results[:10],
-            video_total=video_total,
             live_results=live_results[:10],
+            video_total=video_total,
             live_total=live_total,
             favorites_bvid=favorites_bvid,
             favorites_room_id=favorites_room_id
         )
     except Exception as e:
         return render_template('result.html', error=f"搜索失败：{str(e)}")
-
 
 @app.route('/search_page', methods=['POST'])
 def search_page():
@@ -471,7 +539,7 @@ def search_page():
                 return jsonify({"error": "视频数据文件为空，请重新搜索"})
             results = weighted_search(query=keyword_list, df=df.copy(), top_n=5000)
             result_data = results.to_dict(orient='records')
-            favorites = session.get('video_favorites', [])
+            favorites = global_favorites.get('video_favorites', [])
         else:
             if not os.path.exists(TEMP_LIVE_CSV_PATH):
                 return jsonify({"error": "直播数据文件不存在，请重新搜索"})
@@ -479,7 +547,7 @@ def search_page():
             if df.empty:
                 return jsonify({"error": "直播数据文件为空，请重新搜索"})
             result_data = df.to_dict(orient='records')
-            favorites = session.get('live_favorites', [])
+            favorites = global_favorites.get('live_favorites', [])
 
         start = (page - 1) * items_per_page
         end = start + items_per_page
@@ -495,7 +563,6 @@ def search_page():
         })
     except Exception as e:
         return jsonify({"error": f"分页处理失败：{str(e)}"})
-
 
 @app.route('/analyze/<bvid>')
 def analyze(bvid):
@@ -521,7 +588,6 @@ def analyze(bvid):
                                keywords=session.get('last_keywords', ''))
     except Exception as e:
         return render_template('analysis.html', error=f"分析失败：{str(e)}")
-
 
 if __name__ == '__main__':
     app.run(debug=True)
