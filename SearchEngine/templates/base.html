@@ -198,15 +198,49 @@
         .success-modal-button:hover {
             background-color: #0083b0;
         }
+
+        .favorites-link {
+            position: relative;
+        }
+
+        .live-count-tooltip {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            white-space: nowrap;
+            z-index: 1000;
+            margin-top: 5px;
+        }
+
+        .favorites-link:hover .live-count-tooltip {
+            display: block;
+        }
+
+        .live-count {
+            color: #ff6b6b;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <nav class="main-nav">
-        <div>
+        <div class="nav-left">
             <a href="{{ url_for('index') }}">🏠 首页</a>
-            <a href="{{ url_for('show_favorites') }}">❤️ 我的收藏</a>
+            <a href="{{ url_for('show_favorites') }}" class="favorites-link" data-live-count="{{ live_count }}">
+                ❤️ 我的收藏
+                <div class="live-count-tooltip">
+                    当前有 <span class="live-count">{{ live_count }}</span> 个直播间正在直播
+                </div>
+            </a>
         </div>
-        <div>
+        <div class="nav-right">
             {% if current_user %}
                 <span>欢迎，{{ current_user }}</span>
                 <a href="{{ url_for('logout') }}">登出</a>
